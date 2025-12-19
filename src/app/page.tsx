@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { Hero } from "@/components/sections/Hero";
+import { Gallery } from "@/components/sections/Gallery";
 import { BookingCalendar } from "@/components/booking/BookingCalendar";
 import { GuestSelector } from "@/components/booking/GuestSelector";
 import { RoomSelector } from "@/components/booking/RoomSelector";
@@ -210,6 +211,14 @@ export default function Home() {
                     </div>
                 </div>
             </section>
+
+            {/* Photo Gallery */}
+            {images.length > 0 && (
+                <Gallery
+                    images={images.map(img => ({ url: img.url, alt_text: img.alt_text }))}
+                    title="Explore Our Homestay"
+                />
+            )}
 
             {/* Footer with Social Links */}
             <footer className="bg-white border-t py-12">
