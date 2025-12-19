@@ -4,11 +4,12 @@ import { useState } from "react";
 import { useBookingStore } from "@/store/useBookingStore";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { generateWhatsAppLink } from "@/lib/whatsapp";
 import { createBooking } from "@/lib/supabase";
 import { format } from "date-fns";
 import { toast } from "sonner";
-import { Loader2, MessageCircle } from "lucide-react";
+import { Loader2, MessageCircle, User, Phone } from "lucide-react";
 
 interface SummaryCardProps {
     propertyId: string;
@@ -19,10 +20,13 @@ interface SummaryCardProps {
 export function SummaryCard({ propertyId, whatsappNumber, propertyName }: SummaryCardProps) {
     const { dateRange, guestCount, roomCount, selectedAddOns, getTotalPrice, getNights, getRoomPrice } = useBookingStore();
     const [isLoading, setIsLoading] = useState(false);
+    const [guestName, setGuestName] = useState("");
+    const [guestPhone, setGuestPhone] = useState("");
 
     const totalPrice = getTotalPrice();
     const nights = getNights();
     const roomPrice = getRoomPrice();
+    const addOnsTotal = selectedAddOns.reduce((sum, a) => sum + a.price, 0);
 
     const handleBook = async () => {
         if (!dateRange.from || !dateRange.to) {
@@ -30,12 +34,24 @@ export function SummaryCard({ propertyId, whatsappNumber, propertyName }: Summar
             return;
         }
 
+        if (!guestName.trim()) {
+            toast.error("Please enter your name");
+            return;
+        }
+
+        if (!guestPhone.trim()) {
+            toast.error("Please enter your phone number");
+            return;
+        }
+
         setIsLoading(true);
 
         try {
-            // Create pending booking in Supabase
+            // Create pending booking in Supabase with customer info
             const booking = await createBooking({
                 property_id: propertyId,
+                guest_name: guestName.trim(),
+                guest_phone: guestPhone.trim(),
                 start_date: format(dateRange.from, "yyyy-MM-dd"),
                 end_date: format(dateRange.to, "yyyy-MM-dd"),
                 num_guests: guestCount,
@@ -46,12 +62,13 @@ export function SummaryCard({ propertyId, whatsappNumber, propertyName }: Summar
 
             if (!booking) {
                 toast.error("Failed to create booking. Please try again.");
+                setIsLoading(false);
                 return;
             }
 
             toast.success("Booking request created! Redirecting to WhatsApp...");
 
-            // Generate WhatsApp link and open
+            // Generate WhatsApp link with booking reference
             const link = generateWhatsAppLink({
                 propertyId,
                 propertyName,
@@ -63,6 +80,9 @@ export function SummaryCard({ propertyId, whatsappNumber, propertyName }: Summar
                 totalPrice,
                 addOns: selectedAddOns.map(a => ({ name: a.name, price: a.price })),
                 whatsappNumber,
+                guestName: guestName.trim(),
+                guestPhone: guestPhone.trim(),
+                bookingRef: booking.id.slice(0, 8).toUpperCase(),
             });
 
             // Small delay to show success toast
@@ -84,6 +104,30 @@ export function SummaryCard({ propertyId, whatsappNumber, propertyName }: Summar
                 <CardTitle className="text-2xl font-bold">Booking Summary</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4 pt-6">
+                {/* Customer Info */}
+                <div className="space-y-3 pb-4 border-b">
+                    <p className="text-sm font-medium text-muted-foreground">Your Information</p>
+                    <div className="relative">
+                        <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                        <Input
+                            placeholder="Your Name"
+                            value={guestName}
+                            onChange={(e) => setGuestName(e.target.value)}
+                            className="pl-10"
+                        />
+                    </div>
+                    <div className="relative">
+                        <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                        <Input
+                            placeholder="Phone Number (e.g., 0123456789)"
+                            value={guestPhone}
+                            onChange={(e) => setGuestPhone(e.target.value)}
+                            className="pl-10"
+                        />
+                    </div>
+                </div>
+
+                {/* Date Summary */}
                 <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Check-in:</span>
                     <span className="font-medium">{dateRange.from ? format(dateRange.from, "PPP") : "Select date"}</span>
@@ -93,6 +137,7 @@ export function SummaryCard({ propertyId, whatsappNumber, propertyName }: Summar
                     <span className="font-medium">{dateRange.to ? format(dateRange.to, "PPP") : "Select date"}</span>
                 </div>
 
+                {/* Pricing Breakdown */}
                 <div className="border-t pt-4 space-y-2">
                     <div className="flex justify-between text-sm">
                         <span className="text-muted-foreground">{roomCount} Rooms × {nights} nights</span>
@@ -107,6 +152,7 @@ export function SummaryCard({ propertyId, whatsappNumber, propertyName }: Summar
                     </div>
                 </div>
 
+                {/* Add-ons */}
                 {selectedAddOns.length > 0 && (
                     <div className="border-t pt-4 space-y-2">
                         <span className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Add-ons</span>
@@ -116,9 +162,14 @@ export function SummaryCard({ propertyId, whatsappNumber, propertyName }: Summar
                                 <span className="font-medium">RM{addon.price}</span>
                             </div>
                         ))}
+                        <div className="flex justify-between text-sm font-medium">
+                            <span className="text-muted-foreground">Add-ons subtotal</span>
+                            <span>RM{addOnsTotal}</span>
+                        </div>
                     </div>
                 )}
 
+                {/* Total */}
                 <div className="flex justify-between text-xl font-bold border-t pt-4">
                     <span>Total</span>
                     <span className="text-primary">RM{totalPrice}</span>
