@@ -1,12 +1,19 @@
 "use client";
 
-import { useBookingStore, type AddOn } from "@/store/useBookingStore";
+import { useBookingStore } from "@/store/useBookingStore";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { Gift } from "lucide-react";
+
+interface AddOnItem {
+    id: string;
+    name: string;
+    price: number;
+}
 
 interface AddOnSelectorProps {
-    addOns: AddOn[];
+    addOns: AddOnItem[];
 }
 
 export function AddOnSelector({ addOns }: AddOnSelectorProps) {
@@ -15,7 +22,10 @@ export function AddOnSelector({ addOns }: AddOnSelectorProps) {
     return (
         <Card>
             <CardHeader>
-                <CardTitle className="text-xl">Enhance Your Stay (Add-ons)</CardTitle>
+                <CardTitle className="text-xl flex items-center gap-2">
+                    <Gift className="w-5 h-5" />
+                    Enhance Your Stay (Add-ons)
+                </CardTitle>
             </CardHeader>
             <CardContent>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

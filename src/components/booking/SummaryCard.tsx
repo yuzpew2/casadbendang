@@ -17,11 +17,12 @@ interface SummaryCardProps {
 }
 
 export function SummaryCard({ propertyId, whatsappNumber, propertyName }: SummaryCardProps) {
-    const { dateRange, guestCount, selectedAddOns, getTotalPrice, getNights, basePrice, cleaningFee } = useBookingStore();
+    const { dateRange, guestCount, roomCount, selectedAddOns, getTotalPrice, getNights, getRoomPrice } = useBookingStore();
     const [isLoading, setIsLoading] = useState(false);
 
     const totalPrice = getTotalPrice();
     const nights = getNights();
+    const roomPrice = getRoomPrice();
 
     const handleBook = async () => {
         if (!dateRange.from || !dateRange.to) {
@@ -38,6 +39,7 @@ export function SummaryCard({ propertyId, whatsappNumber, propertyName }: Summar
                 start_date: format(dateRange.from, "yyyy-MM-dd"),
                 end_date: format(dateRange.to, "yyyy-MM-dd"),
                 num_guests: guestCount,
+                room_count: roomCount,
                 total_price: totalPrice,
                 add_ons: selectedAddOns.map(a => ({ name: a.name, price: a.price })),
             });
@@ -57,6 +59,7 @@ export function SummaryCard({ propertyId, whatsappNumber, propertyName }: Summar
                 endDate: dateRange.to,
                 nights,
                 guests: guestCount,
+                roomCount,
                 totalPrice,
                 addOns: selectedAddOns.map(a => ({ name: a.name, price: a.price })),
                 whatsappNumber,
@@ -92,12 +95,11 @@ export function SummaryCard({ propertyId, whatsappNumber, propertyName }: Summar
 
                 <div className="border-t pt-4 space-y-2">
                     <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">RM{basePrice} × {nights} nights</span>
-                        <span className="font-medium">RM{basePrice * nights}</span>
+                        <span className="text-muted-foreground">{roomCount} Rooms × {nights} nights</span>
+                        <span className="font-medium">RM{roomPrice * nights}</span>
                     </div>
-                    <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">Cleaning fee</span>
-                        <span className="font-medium">RM{cleaningFee}</span>
+                    <div className="flex justify-between text-sm text-muted-foreground">
+                        <span>@ RM{roomPrice}/night</span>
                     </div>
                     <div className="flex justify-between text-sm">
                         <span className="text-muted-foreground">Guests</span>

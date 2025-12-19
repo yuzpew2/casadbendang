@@ -1,70 +1,86 @@
 import { create } from 'zustand';
-import { addDays } from 'date-fns';
+import type { RoomCount } from '@/types/database';
 
-export interface DateRange {
-    from: Date | undefined;
-    to?: Date | undefined;
-}
-
-export interface AddOn {
+interface AddOnItem {
     id: string;
     name: string;
     price: number;
 }
 
+interface RoomPrices {
+    price_3_rooms: number;
+    price_4_rooms: number;
+    price_6_rooms: number;
+}
+
 interface BookingState {
-    dateRange: DateRange;
+    dateRange: { from: Date | undefined; to: Date | undefined };
     guestCount: number;
-    selectedAddOns: AddOn[];
-    basePrice: number;
-    cleaningFee: number;
+    roomCount: RoomCount;
+    selectedAddOns: AddOnItem[];
+    roomPrices: RoomPrices;
 
     // Actions
-    setDateRange: (range: DateRange) => void;
+    setDateRange: (range: { from: Date | undefined; to: Date | undefined }) => void;
     setGuestCount: (count: number) => void;
-    toggleAddOn: (addOn: AddOn) => void;
-    setPrices: (basePrice: number, cleaningFee: number) => void;
+    setRoomCount: (count: RoomCount) => void;
+    toggleAddOn: (addOn: AddOnItem) => void;
+    setRoomPrices: (prices: RoomPrices) => void;
 
     // Computed
-    getTotalPrice: () => number;
     getNights: () => number;
+    getRoomPrice: () => number;
+    getTotalPrice: () => number;
 }
 
 export const useBookingStore = create<BookingState>((set, get) => ({
-    dateRange: {
-        from: addDays(new Date(), 1),
-        to: addDays(new Date(), 3),
-    },
-    guestCount: 1,
+    dateRange: { from: undefined, to: undefined },
+    guestCount: 2,
+    roomCount: 3,
     selectedAddOns: [],
-    basePrice: 0,
-    cleaningFee: 0,
+    roomPrices: {
+        price_3_rooms: 350,
+        price_4_rooms: 450,
+        price_6_rooms: 650,
+    },
 
     setDateRange: (range) => set({ dateRange: range }),
+
     setGuestCount: (count) => set({ guestCount: count }),
-    setPrices: (basePrice, cleaningFee) => set({ basePrice, cleaningFee }),
+
+    setRoomCount: (count) => set({ roomCount: count }),
 
     toggleAddOn: (addOn) => set((state) => {
-        const isAlreadySelected = state.selectedAddOns.find((i) => i.id === addOn.id);
-        if (isAlreadySelected) {
-            return { selectedAddOns: state.selectedAddOns.filter((i) => i.id !== addOn.id) };
+        const exists = state.selectedAddOns.find(a => a.id === addOn.id);
+        if (exists) {
+            return { selectedAddOns: state.selectedAddOns.filter(a => a.id !== addOn.id) };
         }
         return { selectedAddOns: [...state.selectedAddOns, addOn] };
     }),
 
+    setRoomPrices: (prices) => set({ roomPrices: prices }),
+
     getNights: () => {
-        const { from, to } = get().dateRange;
-        if (!from || !to) return 0;
-        const diffTime = Math.abs(to.getTime() - from.getTime());
+        const { dateRange } = get();
+        if (!dateRange.from || !dateRange.to) return 0;
+        const diffTime = dateRange.to.getTime() - dateRange.from.getTime();
         return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     },
 
-    getTotalPrice: () => {
-        const state = get();
-        const nights = state.getNights();
-        if (nights === 0) return 0;
+    getRoomPrice: () => {
+        const { roomCount, roomPrices } = get();
+        switch (roomCount) {
+            case 3: return roomPrices.price_3_rooms;
+            case 4: return roomPrices.price_4_rooms;
+            case 6: return roomPrices.price_6_rooms;
+            default: return roomPrices.price_3_rooms;
+        }
+    },
 
-        const addOnsTotal = state.selectedAddOns.reduce((acc, curr) => acc + curr.price, 0);
-        return (nights * state.basePrice) + state.cleaningFee + addOnsTotal;
+    getTotalPrice: () => {
+        const nights = get().getNights();
+        const roomPrice = get().getRoomPrice();
+        const addOnsTotal = get().selectedAddOns.reduce((sum, a) => sum + a.price, 0);
+        return (roomPrice * nights) + addOnsTotal;
     },
 }));

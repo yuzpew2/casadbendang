@@ -1,9 +1,10 @@
 "use client";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import Image from "next/image";
 import {
     Home,
     Calendar as CalendarIcon,
@@ -15,7 +16,13 @@ import {
     Trash2,
     Check,
     X,
-    ExternalLink
+    ExternalLink,
+    ImageIcon,
+    Upload,
+    GripVertical,
+    Instagram,
+    Facebook,
+    AlertCircle
 } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -30,14 +37,37 @@ import {
     getAddOns,
     createAddOn,
     updateAddOn,
-    deleteAddOn
+    deleteAddOn,
+    getPropertyImages,
+    createPropertyImage,
+    deletePropertyImage,
+    uploadImage,
+    reorderPropertyImages
 } from "@/lib/supabase";
-import type { Property, Booking, AddOn, BookingStatus } from "@/types/database";
+import type { Property, Booking, AddOn, PropertyImage, BookingStatus } from "@/types/database";
 import { format, startOfMonth, endOfMonth, isWithinInterval, parseISO } from "date-fns";
+
+// TikTok icon
+function TikTokIcon({ className }: { className?: string }) {
+    return (
+        <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+            <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5 20.1a6.34 6.34 0 0 0 10.86-4.43v-7a8.16 8.16 0 0 0 4.77 1.52v-3.4a4.85 4.85 0 0 1-1-.1z" />
+        </svg>
+    );
+}
 
 export default function AdminDashboard() {
     const [activeTab, setActiveTab] = useState("overview");
+    const [property, setProperty] = useState<Property | null>(null);
     const router = useRouter();
+
+    useEffect(() => {
+        async function fetchProperty() {
+            const data = await getProperty();
+            setProperty(data);
+        }
+        fetchProperty();
+    }, []);
 
     const handleLogout = async () => {
         try {
@@ -54,7 +84,17 @@ export default function AdminDashboard() {
             {/* Sidebar */}
             <aside className="w-64 bg-white border-r flex flex-col">
                 <div className="p-6 border-b">
-                    <h1 className="text-xl font-bold text-primary italic">Casa Bendang Admin</h1>
+                    {property?.logo_url ? (
+                        <Image
+                            src={property.logo_url}
+                            alt={property.name}
+                            width={150}
+                            height={50}
+                            className="object-contain"
+                        />
+                    ) : (
+                        <h1 className="text-xl font-bold text-primary italic">Casa Bendang Admin</h1>
+                    )}
                 </div>
                 <nav className="flex-1 p-4 space-y-2">
                     <SidebarItem
@@ -68,6 +108,12 @@ export default function AdminDashboard() {
                         label="Bookings"
                         active={activeTab === "bookings"}
                         onClick={() => setActiveTab("bookings")}
+                    />
+                    <SidebarItem
+                        icon={<ImageIcon className="w-5 h-5" />}
+                        label="Images"
+                        active={activeTab === "images"}
+                        onClick={() => setActiveTab("images")}
                     />
                     <SidebarItem
                         icon={<Package className="w-5 h-5" />}
@@ -103,9 +149,10 @@ export default function AdminDashboard() {
             {/* Main Content */}
             <main className="flex-1 p-10 overflow-auto">
                 {activeTab === "overview" && <OverviewTab />}
-                {activeTab === "settings" && <SettingsTab />}
+                {activeTab === "settings" && <SettingsTab onUpdate={setProperty} />}
                 {activeTab === "addons" && <AddOnsTab />}
                 {activeTab === "bookings" && <BookingsTab />}
+                {activeTab === "images" && <ImagesTab />}
             </main>
         </div>
     );
@@ -157,7 +204,6 @@ function OverviewTab() {
         );
     }
 
-    // Calculate stats
     const now = new Date();
     const monthStart = startOfMonth(now);
     const monthEnd = endOfMonth(now);
@@ -199,7 +245,6 @@ function OverviewTab() {
                 />
             </div>
 
-            {/* Recent Bookings Preview */}
             <Card>
                 <CardHeader>
                     <CardTitle>Recent Bookings</CardTitle>
@@ -214,7 +259,7 @@ function OverviewTab() {
                                     <div>
                                         <p className="font-medium">{booking.guest_name || "Guest"}</p>
                                         <p className="text-sm text-muted-foreground">
-                                            {format(parseISO(booking.start_date), "dd MMM")} - {format(parseISO(booking.end_date), "dd MMM yyyy")}
+                                            {format(parseISO(booking.start_date), "dd MMM")} - {format(parseISO(booking.end_date), "dd MMM yyyy")} • {booking.room_count} rooms
                                         </p>
                                     </div>
                                     <div className="text-right">
@@ -260,18 +305,25 @@ function StatusBadge({ status }: { status: BookingStatus }) {
     );
 }
 
-function SettingsTab() {
+function SettingsTab({ onUpdate }: { onUpdate: (property: Property) => void }) {
     const [property, setProperty] = useState<Property | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
+    const [isUploadingLogo, setIsUploadingLogo] = useState(false);
+    const logoInputRef = useRef<HTMLInputElement>(null);
 
     const [formData, setFormData] = useState({
         name: "",
         whatsapp_number: "",
-        price_per_night: 0,
-        cleaning_fee: 0,
+        price_3_rooms: 350,
+        price_4_rooms: 450,
+        price_6_rooms: 650,
         description: "",
         max_guests: 10,
+        instagram_url: "",
+        facebook_url: "",
+        tiktok_url: "",
+        logo_url: "",
     });
 
     useEffect(() => {
@@ -283,10 +335,15 @@ function SettingsTab() {
                     setFormData({
                         name: data.name,
                         whatsapp_number: data.whatsapp_number || "",
-                        price_per_night: data.price_per_night,
-                        cleaning_fee: data.cleaning_fee,
+                        price_3_rooms: data.price_3_rooms,
+                        price_4_rooms: data.price_4_rooms,
+                        price_6_rooms: data.price_6_rooms,
                         description: data.description || "",
                         max_guests: data.max_guests,
+                        instagram_url: data.instagram_url || "",
+                        facebook_url: data.facebook_url || "",
+                        tiktok_url: data.tiktok_url || "",
+                        logo_url: data.logo_url || "",
                     });
                 }
             } catch (error) {
@@ -302,9 +359,16 @@ function SettingsTab() {
         if (!property) return;
         setIsSaving(true);
         try {
-            const updated = await updateProperty(property.id, formData);
+            const updated = await updateProperty(property.id, {
+                ...formData,
+                instagram_url: formData.instagram_url || null,
+                facebook_url: formData.facebook_url || null,
+                tiktok_url: formData.tiktok_url || null,
+                logo_url: formData.logo_url || null,
+            });
             if (updated) {
                 setProperty(updated);
+                onUpdate(updated);
                 toast.success("Settings saved successfully!");
             } else {
                 toast.error("Failed to save settings");
@@ -313,6 +377,26 @@ function SettingsTab() {
             toast.error("Failed to save settings");
         } finally {
             setIsSaving(false);
+        }
+    };
+
+    const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setIsUploadingLogo(true);
+        try {
+            const url = await uploadImage(file, 'logos');
+            if (url) {
+                setFormData({ ...formData, logo_url: url });
+                toast.success("Logo uploaded!");
+            } else {
+                toast.error("Failed to upload logo");
+            }
+        } catch (error) {
+            toast.error("Failed to upload logo");
+        } finally {
+            setIsUploadingLogo(false);
         }
     };
 
@@ -327,71 +411,386 @@ function SettingsTab() {
     return (
         <div className="space-y-8 max-w-4xl">
             <h2 className="text-3xl font-bold">General Settings</h2>
+
+            {/* Logo Section */}
             <Card>
                 <CardHeader>
-                    <CardTitle>Property Configuration</CardTitle>
+                    <CardTitle>Logo</CardTitle>
+                    <CardDescription>Upload your property logo (recommended: 300x100px, PNG or SVG)</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    <div className="flex items-center gap-6">
+                        {formData.logo_url ? (
+                            <div className="relative">
+                                <Image
+                                    src={formData.logo_url}
+                                    alt="Logo"
+                                    width={150}
+                                    height={50}
+                                    className="object-contain border rounded-lg p-2"
+                                />
+                                <Button
+                                    variant="destructive"
+                                    size="sm"
+                                    className="absolute -top-2 -right-2 h-6 w-6 p-0 rounded-full"
+                                    onClick={() => setFormData({ ...formData, logo_url: "" })}
+                                >
+                                    <X className="w-3 h-3" />
+                                </Button>
+                            </div>
+                        ) : (
+                            <div className="w-[150px] h-[50px] border-2 border-dashed rounded-lg flex items-center justify-center text-muted-foreground">
+                                No logo
+                            </div>
+                        )}
+                        <input
+                            type="file"
+                            ref={logoInputRef}
+                            onChange={handleLogoUpload}
+                            accept="image/*"
+                            className="hidden"
+                        />
+                        <Button
+                            variant="outline"
+                            onClick={() => logoInputRef.current?.click()}
+                            disabled={isUploadingLogo}
+                        >
+                            {isUploadingLogo ? (
+                                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                            ) : (
+                                <Upload className="w-4 h-4 mr-2" />
+                            )}
+                            Upload Logo
+                        </Button>
+                    </div>
+                </CardContent>
+            </Card>
+
+            {/* Basic Info */}
+            <Card>
+                <CardHeader>
+                    <CardTitle>Property Information</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-6">
-                    <div className="space-y-2">
-                        <label className="text-sm font-medium">Property Name</label>
-                        <Input
-                            value={formData.name}
-                            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                        />
-                    </div>
-                    <div className="space-y-2">
-                        <label className="text-sm font-medium">WhatsApp Number (e.g., 60193452907)</label>
-                        <Input
-                            value={formData.whatsapp_number}
-                            onChange={(e) => setFormData({ ...formData, whatsapp_number: e.target.value })}
-                        />
-                    </div>
-                    <div className="grid grid-cols-3 gap-4">
+                    <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
-                            <label className="text-sm font-medium">Price Per Night (RM)</label>
+                            <label className="text-sm font-medium">Property Name</label>
                             <Input
-                                type="number"
-                                value={formData.price_per_night}
-                                onChange={(e) => setFormData({ ...formData, price_per_night: parseInt(e.target.value) || 0 })}
+                                value={formData.name}
+                                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                             />
                         </div>
                         <div className="space-y-2">
-                            <label className="text-sm font-medium">Cleaning Fee (RM)</label>
+                            <label className="text-sm font-medium">WhatsApp Number</label>
                             <Input
-                                type="number"
-                                value={formData.cleaning_fee}
-                                onChange={(e) => setFormData({ ...formData, cleaning_fee: parseInt(e.target.value) || 0 })}
-                            />
-                        </div>
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium">Max Guests</label>
-                            <Input
-                                type="number"
-                                value={formData.max_guests}
-                                onChange={(e) => setFormData({ ...formData, max_guests: parseInt(e.target.value) || 1 })}
+                                value={formData.whatsapp_number}
+                                onChange={(e) => setFormData({ ...formData, whatsapp_number: e.target.value })}
+                                placeholder="60193452907"
                             />
                         </div>
                     </div>
                     <div className="space-y-2">
-                        <label className="text-sm font-medium">Property Description</label>
+                        <label className="text-sm font-medium">Description</label>
                         <textarea
                             className="w-full min-h-[100px] rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                             value={formData.description}
                             onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                         />
                     </div>
-                    <Button onClick={handleSave} disabled={isSaving}>
-                        {isSaving ? (
-                            <>
-                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                Saving...
-                            </>
-                        ) : (
-                            "Save Changes"
-                        )}
-                    </Button>
+                    <div className="space-y-2">
+                        <label className="text-sm font-medium">Max Guests</label>
+                        <Input
+                            type="number"
+                            value={formData.max_guests}
+                            onChange={(e) => setFormData({ ...formData, max_guests: parseInt(e.target.value) || 1 })}
+                            className="w-32"
+                        />
+                    </div>
                 </CardContent>
             </Card>
+
+            {/* Room Pricing */}
+            <Card>
+                <CardHeader>
+                    <CardTitle>Room Pricing</CardTitle>
+                    <CardDescription>Set prices per night for each room configuration</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <div className="grid grid-cols-3 gap-4">
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium">3 Rooms (RM/night)</label>
+                            <Input
+                                type="number"
+                                value={formData.price_3_rooms}
+                                onChange={(e) => setFormData({ ...formData, price_3_rooms: parseInt(e.target.value) || 0 })}
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium">4 Rooms (RM/night)</label>
+                            <Input
+                                type="number"
+                                value={formData.price_4_rooms}
+                                onChange={(e) => setFormData({ ...formData, price_4_rooms: parseInt(e.target.value) || 0 })}
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium">6 Rooms (RM/night)</label>
+                            <Input
+                                type="number"
+                                value={formData.price_6_rooms}
+                                onChange={(e) => setFormData({ ...formData, price_6_rooms: parseInt(e.target.value) || 0 })}
+                            />
+                        </div>
+                    </div>
+                </CardContent>
+            </Card>
+
+            {/* Social Media */}
+            <Card>
+                <CardHeader>
+                    <CardTitle>Social Media Links</CardTitle>
+                    <CardDescription>Add your social media profiles (they'll appear on the landing page)</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    <div className="flex items-center gap-4">
+                        <div className="p-2 rounded-lg bg-gradient-to-tr from-yellow-400 via-pink-500 to-purple-600 text-white">
+                            <Instagram className="w-5 h-5" />
+                        </div>
+                        <Input
+                            placeholder="https://instagram.com/yourusername"
+                            value={formData.instagram_url}
+                            onChange={(e) => setFormData({ ...formData, instagram_url: e.target.value })}
+                            className="flex-1"
+                        />
+                    </div>
+                    <div className="flex items-center gap-4">
+                        <div className="p-2 rounded-lg bg-blue-600 text-white">
+                            <Facebook className="w-5 h-5" />
+                        </div>
+                        <Input
+                            placeholder="https://facebook.com/yourpage"
+                            value={formData.facebook_url}
+                            onChange={(e) => setFormData({ ...formData, facebook_url: e.target.value })}
+                            className="flex-1"
+                        />
+                    </div>
+                    <div className="flex items-center gap-4">
+                        <div className="p-2 rounded-lg bg-black text-white">
+                            <TikTokIcon className="w-5 h-5" />
+                        </div>
+                        <Input
+                            placeholder="https://tiktok.com/@yourusername"
+                            value={formData.tiktok_url}
+                            onChange={(e) => setFormData({ ...formData, tiktok_url: e.target.value })}
+                            className="flex-1"
+                        />
+                    </div>
+                </CardContent>
+            </Card>
+
+            <Button onClick={handleSave} disabled={isSaving} size="lg">
+                {isSaving ? (
+                    <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Saving...
+                    </>
+                ) : (
+                    "Save All Changes"
+                )}
+            </Button>
+        </div>
+    );
+}
+
+function ImagesTab() {
+    const [property, setProperty] = useState<Property | null>(null);
+    const [images, setImages] = useState<PropertyImage[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [isUploading, setIsUploading] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    useEffect(() => {
+        async function fetchData() {
+            try {
+                const propertyData = await getProperty();
+                if (propertyData) {
+                    setProperty(propertyData);
+                    const imagesData = await getPropertyImages(propertyData.id);
+                    setImages(imagesData);
+                }
+            } catch (error) {
+                console.error("Error fetching images:", error);
+            } finally {
+                setIsLoading(false);
+            }
+        }
+        fetchData();
+    }, []);
+
+    const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = e.target.files;
+        if (!files?.length || !property) return;
+
+        setIsUploading(true);
+        try {
+            for (const file of Array.from(files)) {
+                const url = await uploadImage(file, 'gallery');
+                if (url) {
+                    const newImage = await createPropertyImage({
+                        property_id: property.id,
+                        url,
+                        alt_text: file.name.split('.')[0],
+                        sort_order: images.length,
+                    });
+                    if (newImage) {
+                        setImages(prev => [...prev, newImage]);
+                    }
+                }
+            }
+            toast.success("Images uploaded!");
+        } catch (error) {
+            toast.error("Failed to upload some images");
+        } finally {
+            setIsUploading(false);
+            if (fileInputRef.current) fileInputRef.current.value = '';
+        }
+    };
+
+    const handleDelete = async (image: PropertyImage) => {
+        if (!confirm("Delete this image?")) return;
+
+        const success = await deletePropertyImage(image.id);
+        if (success) {
+            setImages(images.filter(i => i.id !== image.id));
+            toast.success("Image deleted");
+        } else {
+            toast.error("Failed to delete image");
+        }
+    };
+
+    const moveImage = async (index: number, direction: 'up' | 'down') => {
+        const newIndex = direction === 'up' ? index - 1 : index + 1;
+        if (newIndex < 0 || newIndex >= images.length) return;
+
+        const newImages = [...images];
+        [newImages[index], newImages[newIndex]] = [newImages[newIndex], newImages[index]];
+
+        // Update sort_order
+        const updates = newImages.map((img, i) => ({ id: img.id, sort_order: i }));
+        const success = await reorderPropertyImages(updates);
+
+        if (success) {
+            setImages(newImages.map((img, i) => ({ ...img, sort_order: i })));
+        }
+    };
+
+    if (isLoading) {
+        return (
+            <div className="flex items-center justify-center h-64">
+                <Loader2 className="w-8 h-8 animate-spin text-primary" />
+            </div>
+        );
+    }
+
+    return (
+        <div className="space-y-8">
+            <div className="flex justify-between items-center">
+                <h2 className="text-3xl font-bold">Gallery Images</h2>
+                <div>
+                    <input
+                        type="file"
+                        ref={fileInputRef}
+                        onChange={handleUpload}
+                        accept="image/*"
+                        multiple
+                        className="hidden"
+                    />
+                    <Button onClick={() => fileInputRef.current?.click()} disabled={isUploading}>
+                        {isUploading ? (
+                            <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                        ) : (
+                            <Plus className="w-4 h-4 mr-2" />
+                        )}
+                        Upload Images
+                    </Button>
+                </div>
+            </div>
+
+            {/* Tips */}
+            <Card className="bg-blue-50 border-blue-200">
+                <CardContent className="pt-6">
+                    <div className="flex gap-3">
+                        <AlertCircle className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                        <div className="text-sm text-blue-800">
+                            <p className="font-medium mb-1">Image Tips</p>
+                            <ul className="list-disc list-inside space-y-1 text-blue-700">
+                                <li>Recommended size: <strong>1920 x 1080 pixels</strong> (16:9 ratio)</li>
+                                <li>Supported formats: JPG, PNG, WebP</li>
+                                <li>Maximum 10 images for best performance</li>
+                                <li>First image will be the main hero image</li>
+                                <li>Drag to reorder or use arrows to change order</li>
+                            </ul>
+                        </div>
+                    </div>
+                </CardContent>
+            </Card>
+
+            {/* Image Grid */}
+            {images.length === 0 ? (
+                <Card className="border-dashed">
+                    <CardContent className="py-16 text-center">
+                        <ImageIcon className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                        <p className="text-muted-foreground">No images yet. Upload your first image!</p>
+                    </CardContent>
+                </Card>
+            ) : (
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                    {images.map((image, index) => (
+                        <Card key={image.id} className="overflow-hidden group relative">
+                            <div className="aspect-video relative">
+                                <Image
+                                    src={image.url}
+                                    alt={image.alt_text || 'Property image'}
+                                    fill
+                                    className="object-cover"
+                                />
+                                {index === 0 && (
+                                    <div className="absolute top-2 left-2 bg-primary text-white text-xs px-2 py-1 rounded">
+                                        Main
+                                    </div>
+                                )}
+                            </div>
+                            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                                {index > 0 && (
+                                    <Button
+                                        size="sm"
+                                        variant="secondary"
+                                        onClick={() => moveImage(index, 'up')}
+                                    >
+                                        ↑
+                                    </Button>
+                                )}
+                                {index < images.length - 1 && (
+                                    <Button
+                                        size="sm"
+                                        variant="secondary"
+                                        onClick={() => moveImage(index, 'down')}
+                                    >
+                                        ↓
+                                    </Button>
+                                )}
+                                <Button
+                                    size="sm"
+                                    variant="destructive"
+                                    onClick={() => handleDelete(image)}
+                                >
+                                    <Trash2 className="w-4 h-4" />
+                                </Button>
+                            </div>
+                        </Card>
+                    ))}
+                </div>
+            )}
         </div>
     );
 }
@@ -481,7 +880,6 @@ function AddOnsTab() {
                 <h2 className="text-3xl font-bold">Manage Add-ons</h2>
             </div>
 
-            {/* Add New Form */}
             <Card>
                 <CardHeader>
                     <CardTitle className="text-lg">Add New</CardTitle>
@@ -508,7 +906,6 @@ function AddOnsTab() {
                 </CardContent>
             </Card>
 
-            {/* Add-ons List */}
             <Card>
                 <CardContent className="p-0">
                     <table className="w-full">
@@ -631,7 +1028,7 @@ function BookingsTab() {
                             <tr className="border-b bg-slate-50">
                                 <th className="text-left p-4 font-bold">Guest</th>
                                 <th className="text-left p-4 font-bold">Dates</th>
-                                <th className="text-left p-4 font-bold">Guests</th>
+                                <th className="text-left p-4 font-bold">Rooms</th>
                                 <th className="text-left p-4 font-bold">Status</th>
                                 <th className="text-left p-4 font-bold">Total</th>
                                 <th className="text-right p-4 font-bold">Actions</th>
@@ -656,7 +1053,7 @@ function BookingsTab() {
                                         <td className="p-4">
                                             {format(parseISO(booking.start_date), "dd MMM")} - {format(parseISO(booking.end_date), "dd MMM yyyy")}
                                         </td>
-                                        <td className="p-4">{booking.num_guests}</td>
+                                        <td className="p-4">{booking.room_count} rooms</td>
                                         <td className="p-4">
                                             <StatusBadge status={booking.status} />
                                         </td>

@@ -1,13 +1,17 @@
 import { createBrowserClient } from '@supabase/ssr';
 import type {
     Property,
+    PropertyImage,
     Booking,
     AddOn,
     CreateBookingInput,
     UpdatePropertyInput,
     CreateAddOnInput,
     UpdateAddOnInput,
-    BookingStatus
+    CreatePropertyImageInput,
+    UpdatePropertyImageInput,
+    BookingStatus,
+    RoomCount
 } from '@/types/database';
 
 // Browser client for client components
@@ -51,12 +55,90 @@ export async function updateProperty(id: string, updates: UpdatePropertyInput): 
     return data;
 }
 
+// ============ PROPERTY IMAGES FUNCTIONS ============
+
+export async function getPropertyImages(propertyId: string): Promise<PropertyImage[]> {
+    const supabase = createClient();
+    const { data, error } = await supabase
+        .from('property_images')
+        .select('*')
+        .eq('property_id', propertyId)
+        .order('sort_order', { ascending: true });
+
+    if (error) {
+        console.error('Error fetching property images:', error);
+        return [];
+    }
+    return data || [];
+}
+
+export async function createPropertyImage(input: CreatePropertyImageInput): Promise<PropertyImage | null> {
+    const supabase = createClient();
+    const { data, error } = await supabase
+        .from('property_images')
+        .insert(input)
+        .select()
+        .single();
+
+    if (error) {
+        console.error('Error creating property image:', error);
+        return null;
+    }
+    return data;
+}
+
+export async function updatePropertyImage(id: string, updates: UpdatePropertyImageInput): Promise<PropertyImage | null> {
+    const supabase = createClient();
+    const { data, error } = await supabase
+        .from('property_images')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single();
+
+    if (error) {
+        console.error('Error updating property image:', error);
+        return null;
+    }
+    return data;
+}
+
+export async function deletePropertyImage(id: string): Promise<boolean> {
+    const supabase = createClient();
+    const { error } = await supabase
+        .from('property_images')
+        .delete()
+        .eq('id', id);
+
+    if (error) {
+        console.error('Error deleting property image:', error);
+        return false;
+    }
+    return true;
+}
+
+export async function reorderPropertyImages(images: { id: string; sort_order: number }[]): Promise<boolean> {
+    const supabase = createClient();
+
+    for (const img of images) {
+        const { error } = await supabase
+            .from('property_images')
+            .update({ sort_order: img.sort_order })
+            .eq('id', img.id);
+
+        if (error) {
+            console.error('Error reordering images:', error);
+            return false;
+        }
+    }
+    return true;
+}
+
 // ============ BOOKING FUNCTIONS ============
 
 export async function getBlockedDates(propertyId: string): Promise<Date[]> {
     const supabase = createClient();
 
-    // Get all bookings that block dates (confirmed, pending, maintenance)
     const { data, error } = await supabase
         .from('bookings')
         .select('start_date, end_date')
@@ -68,13 +150,11 @@ export async function getBlockedDates(propertyId: string): Promise<Date[]> {
         return [];
     }
 
-    // Generate all dates between start and end for each booking
     const blockedDates: Date[] = [];
     data?.forEach(booking => {
         const start = new Date(booking.start_date);
         const end = new Date(booking.end_date);
 
-        // Add all dates from start to end-1 (checkout day is available for check-in)
         const current = new Date(start);
         while (current < end) {
             blockedDates.push(new Date(current));
@@ -96,6 +176,7 @@ export async function createBooking(input: CreateBookingInput): Promise<Booking 
             start_date: input.start_date,
             end_date: input.end_date,
             num_guests: input.num_guests,
+            room_count: input.room_count,
             total_price: input.total_price,
             add_ons: input.add_ons || [],
             notes: input.notes || null,
@@ -156,7 +237,6 @@ export async function deleteBooking(id: string): Promise<boolean> {
     return true;
 }
 
-// Create a maintenance block (blocked dates)
 export async function createMaintenanceBlock(
     propertyId: string,
     startDate: string,
@@ -171,6 +251,7 @@ export async function createMaintenanceBlock(
             start_date: startDate,
             end_date: endDate,
             num_guests: 0,
+            room_count: 3,
             total_price: 0,
             status: 'maintenance',
             notes: notes || 'Maintenance block'
@@ -258,6 +339,53 @@ export async function deleteAddOn(id: string): Promise<boolean> {
 
     if (error) {
         console.error('Error deleting add-on:', error);
+        return false;
+    }
+    return true;
+}
+
+// ============ STORAGE FUNCTIONS ============
+
+export async function uploadImage(file: File, folder: string = 'images'): Promise<string | null> {
+    const supabase = createClient();
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${folder}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+
+    const { data, error } = await supabase.storage
+        .from('property-images')
+        .upload(fileName, file, {
+            cacheControl: '3600',
+            upsert: false
+        });
+
+    if (error) {
+        console.error('Error uploading image:', error);
+        return null;
+    }
+
+    // Get public URL
+    const { data: { publicUrl } } = supabase.storage
+        .from('property-images')
+        .getPublicUrl(data.path);
+
+    return publicUrl;
+}
+
+export async function deleteStorageImage(path: string): Promise<boolean> {
+    const supabase = createClient();
+
+    // Extract path from URL if it's a full URL
+    let filePath = path;
+    if (path.includes('property-images/')) {
+        filePath = path.split('property-images/')[1];
+    }
+
+    const { error } = await supabase.storage
+        .from('property-images')
+        .remove([filePath]);
+
+    if (error) {
+        console.error('Error deleting image from storage:', error);
         return false;
     }
     return true;

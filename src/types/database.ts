@@ -2,17 +2,40 @@
 
 export type BookingStatus = 'pending' | 'confirmed' | 'cancelled' | 'maintenance';
 
+export type RoomCount = 3 | 4 | 6;
+
 export interface Property {
     id: string;
     name: string;
-    price_per_night: number;
-    cleaning_fee: number;
+
+    // Room-based pricing
+    price_3_rooms: number;
+    price_4_rooms: number;
+    price_6_rooms: number;
+
     description: string | null;
-    images: string[] | null;
     whatsapp_number: string | null;
     max_guests: number;
+
+    // Social media
+    instagram_url: string | null;
+    facebook_url: string | null;
+    tiktok_url: string | null;
+
+    // Logo
+    logo_url: string | null;
+
     created_at: string;
     updated_at: string;
+}
+
+export interface PropertyImage {
+    id: string;
+    property_id: string;
+    url: string;
+    alt_text: string | null;
+    sort_order: number;
+    created_at: string;
 }
 
 export interface Booking {
@@ -23,6 +46,7 @@ export interface Booking {
     start_date: string;
     end_date: string;
     num_guests: number;
+    room_count: RoomCount;
     status: BookingStatus;
     total_price: number;
     add_ons: BookingAddOn[];
@@ -53,6 +77,7 @@ export interface CreateBookingInput {
     start_date: string;
     end_date: string;
     num_guests: number;
+    room_count: RoomCount;
     total_price: number;
     add_ons?: BookingAddOn[];
     notes?: string;
@@ -60,12 +85,16 @@ export interface CreateBookingInput {
 
 export interface UpdatePropertyInput {
     name?: string;
-    price_per_night?: number;
-    cleaning_fee?: number;
+    price_3_rooms?: number;
+    price_4_rooms?: number;
+    price_6_rooms?: number;
     description?: string;
-    images?: string[];
     whatsapp_number?: string;
     max_guests?: number;
+    instagram_url?: string | null;
+    facebook_url?: string | null;
+    tiktok_url?: string | null;
+    logo_url?: string | null;
 }
 
 export interface CreateAddOnInput {
@@ -78,4 +107,17 @@ export interface UpdateAddOnInput {
     name?: string;
     price?: number;
     is_active?: boolean;
+}
+
+export interface CreatePropertyImageInput {
+    property_id: string;
+    url: string;
+    alt_text?: string;
+    sort_order?: number;
+}
+
+export interface UpdatePropertyImageInput {
+    url?: string;
+    alt_text?: string;
+    sort_order?: number;
 }
