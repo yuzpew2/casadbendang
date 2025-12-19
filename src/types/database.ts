@@ -25,6 +25,9 @@ export interface Property {
     // Logo
     logo_url: string | null;
 
+    // Settings
+    pending_timeout_hours: number;
+
     created_at: string;
     updated_at: string;
 }
@@ -95,6 +98,7 @@ export interface UpdatePropertyInput {
     facebook_url?: string | null;
     tiktok_url?: string | null;
     logo_url?: string | null;
+    pending_timeout_hours?: number;
 }
 
 export interface CreateAddOnInput {

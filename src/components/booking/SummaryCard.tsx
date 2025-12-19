@@ -174,6 +174,14 @@ export function SummaryCard({ propertyId, whatsappNumber, propertyName }: Summar
                     <span>Total</span>
                     <span className="text-primary">RM{totalPrice}</span>
                 </div>
+
+                {/* Auto-cancel warning */}
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm">
+                    <p className="text-amber-800">
+                        <strong>⏰ Important:</strong> Please confirm your booking via WhatsApp within 24 hours.
+                        Unconfirmed bookings will be automatically cancelled to free up dates for other guests.
+                    </p>
+                </div>
             </CardContent>
             <CardFooter className="pb-6">
                 <Button

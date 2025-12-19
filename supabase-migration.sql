@@ -17,6 +17,10 @@ ADD COLUMN IF NOT EXISTS tiktok_url TEXT;
 ALTER TABLE properties 
 ADD COLUMN IF NOT EXISTS logo_url TEXT;
 
+-- 4. Add pending timeout setting (hours before auto-cancel)
+ALTER TABLE properties 
+ADD COLUMN IF NOT EXISTS pending_timeout_hours INT DEFAULT 24;
+
 -- 4. Add room_count to bookings
 ALTER TABLE bookings 
 ADD COLUMN IF NOT EXISTS room_count INT DEFAULT 3;

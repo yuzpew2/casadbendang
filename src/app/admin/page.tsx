@@ -245,6 +245,77 @@ function OverviewTab() {
                 />
             </div>
 
+            {/* Pending Alerts */}
+            {pendingBookings.length > 0 && (
+                <Card className="border-amber-200 bg-amber-50">
+                    <CardHeader className="pb-2">
+                        <CardTitle className="text-lg flex items-center gap-2 text-amber-800">
+                            <span className="relative flex h-3 w-3">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500"></span>
+                            </span>
+                            Pending Bookings - Action Required
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="space-y-3">
+                            {pendingBookings.map((booking) => {
+                                const createdAt = parseISO(booking.created_at);
+                                const timeoutHours = property?.pending_timeout_hours || 24;
+                                const expiresAt = new Date(createdAt.getTime() + timeoutHours * 60 * 60 * 1000);
+                                const now = new Date();
+                                const hoursRemaining = Math.max(0, Math.floor((expiresAt.getTime() - now.getTime()) / (1000 * 60 * 60)));
+                                const isUrgent = hoursRemaining <= 2;
+
+                                return (
+                                    <div key={booking.id} className={`flex items-center justify-between p-3 bg-white rounded-lg border ${isUrgent ? 'border-red-300' : 'border-amber-200'}`}>
+                                        <div>
+                                            <p className="font-medium">{booking.guest_name || "Guest"}</p>
+                                            <p className="text-sm text-muted-foreground">
+                                                {booking.guest_phone} • {format(parseISO(booking.start_date), "dd MMM")} - {format(parseISO(booking.end_date), "dd MMM")}
+                                            </p>
+                                        </div>
+                                        <div className="text-right flex items-center gap-3">
+                                            <div>
+                                                <p className={`text-sm font-bold ${isUrgent ? 'text-red-600' : 'text-amber-600'}`}>
+                                                    {hoursRemaining > 0 ? `${hoursRemaining}h left` : 'Expiring soon!'}
+                                                </p>
+                                                <p className="text-xs text-muted-foreground">RM{booking.total_price}</p>
+                                            </div>
+                                            <div className="flex gap-1">
+                                                <Button
+                                                    size="sm"
+                                                    className="bg-green-600 hover:bg-green-700"
+                                                    onClick={() => {
+                                                        updateBookingStatus(booking.id, 'confirmed').then(() => {
+                                                            window.location.reload();
+                                                        });
+                                                    }}
+                                                >
+                                                    Confirm
+                                                </Button>
+                                                <Button
+                                                    size="sm"
+                                                    variant="outline"
+                                                    className="text-red-600 border-red-300 hover:bg-red-50"
+                                                    onClick={() => {
+                                                        updateBookingStatus(booking.id, 'cancelled').then(() => {
+                                                            window.location.reload();
+                                                        });
+                                                    }}
+                                                >
+                                                    Cancel
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </CardContent>
+                </Card>
+            )}
+
             <Card>
                 <CardHeader>
                     <CardTitle>Recent Bookings</CardTitle>
@@ -324,6 +395,7 @@ function SettingsTab({ onUpdate }: { onUpdate: (property: Property) => void }) {
         facebook_url: "",
         tiktok_url: "",
         logo_url: "",
+        pending_timeout_hours: 24,
     });
 
     useEffect(() => {
@@ -344,6 +416,7 @@ function SettingsTab({ onUpdate }: { onUpdate: (property: Property) => void }) {
                         facebook_url: data.facebook_url || "",
                         tiktok_url: data.tiktok_url || "",
                         logo_url: data.logo_url || "",
+                        pending_timeout_hours: data.pending_timeout_hours || 24,
                     });
                 }
             } catch (error) {
@@ -365,6 +438,7 @@ function SettingsTab({ onUpdate }: { onUpdate: (property: Property) => void }) {
                 facebook_url: formData.facebook_url || null,
                 tiktok_url: formData.tiktok_url || null,
                 logo_url: formData.logo_url || null,
+                pending_timeout_hours: formData.pending_timeout_hours,
             });
             if (updated) {
                 setProperty(updated);
@@ -584,6 +658,35 @@ function SettingsTab({ onUpdate }: { onUpdate: (property: Property) => void }) {
                             onChange={(e) => setFormData({ ...formData, tiktok_url: e.target.value })}
                             className="flex-1"
                         />
+                    </div>
+                </CardContent>
+            </Card>
+
+            {/* Booking Settings */}
+            <Card>
+                <CardHeader>
+                    <CardTitle>Booking Settings</CardTitle>
+                    <CardDescription>Configure how bookings are handled</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    <div className="space-y-2">
+                        <label className="text-sm font-medium">Pending Booking Timeout (hours)</label>
+                        <div className="flex items-center gap-4">
+                            <Input
+                                type="number"
+                                value={formData.pending_timeout_hours}
+                                onChange={(e) => setFormData({ ...formData, pending_timeout_hours: parseInt(e.target.value) || 24 })}
+                                className="w-32"
+                                min={1}
+                                max={168}
+                            />
+                            <span className="text-sm text-muted-foreground">
+                                Pending bookings will auto-cancel after this time if not confirmed
+                            </span>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                            Recommended: 24-48 hours. This gives guests time to confirm while keeping your calendar accurate.
+                        </p>
                     </div>
                 </CardContent>
             </Card>
