@@ -48,7 +48,7 @@ export function SummaryCard({ propertyId, whatsappNumber, propertyName }: Summar
 
         try {
             // Create pending booking in Supabase with customer info
-            const booking = await createBooking({
+            const result = await createBooking({
                 property_id: propertyId,
                 guest_name: guestName.trim(),
                 guest_phone: guestPhone.trim(),
@@ -60,8 +60,13 @@ export function SummaryCard({ propertyId, whatsappNumber, propertyName }: Summar
                 add_ons: selectedAddOns.map(a => ({ name: a.name, price: a.price })),
             });
 
-            if (!booking) {
-                toast.error("Failed to create booking. Please try again.");
+            if (!result.success) {
+                // Handle different error types
+                if (result.error === 'overlap') {
+                    toast.error(result.message || "These dates are no longer available.");
+                } else {
+                    toast.error(result.message || "Failed to create booking. Please try again.");
+                }
                 setIsLoading(false);
                 return;
             }
@@ -82,7 +87,7 @@ export function SummaryCard({ propertyId, whatsappNumber, propertyName }: Summar
                 whatsappNumber,
                 guestName: guestName.trim(),
                 guestPhone: guestPhone.trim(),
-                bookingRef: booking.id.slice(0, 8).toUpperCase(),
+                bookingRef: result.booking!.id.slice(0, 8).toUpperCase(),
             });
 
             // Small delay to show success toast

@@ -165,8 +165,59 @@ export async function getBlockedDates(propertyId: string): Promise<Date[]> {
     return blockedDates;
 }
 
-export async function createBooking(input: CreateBookingInput): Promise<Booking | null> {
+// Check if dates overlap with existing bookings
+export async function checkBookingOverlap(
+    propertyId: string,
+    startDate: string,
+    endDate: string
+): Promise<boolean> {
     const supabase = createClient();
+
+    // Find any bookings that overlap with the requested dates
+    // Overlap occurs when: existing.start < new.end AND existing.end > new.start
+    const { data, error } = await supabase
+        .from('bookings')
+        .select('id')
+        .eq('property_id', propertyId)
+        .in('status', ['confirmed', 'pending', 'maintenance'])
+        .lt('start_date', endDate)  // existing start is before new end
+        .gt('end_date', startDate)  // existing end is after new start
+        .limit(1);
+
+    if (error) {
+        console.error('Error checking overlap:', error);
+        return true; // Assume overlap on error to be safe
+    }
+
+    return (data?.length || 0) > 0;
+}
+
+export type BookingResult = {
+    success: boolean;
+    booking?: Booking;
+    error?: 'overlap' | 'database' | 'unknown';
+    message?: string;
+};
+
+export async function createBooking(input: CreateBookingInput): Promise<BookingResult> {
+    const supabase = createClient();
+
+    // First, check for date overlap to prevent double booking
+    const hasOverlap = await checkBookingOverlap(
+        input.property_id,
+        input.start_date,
+        input.end_date
+    );
+
+    if (hasOverlap) {
+        return {
+            success: false,
+            error: 'overlap',
+            message: 'Sorry, these dates are no longer available. Please select different dates.'
+        };
+    }
+
+    // No overlap, proceed with booking
     const { data, error } = await supabase
         .from('bookings')
         .insert({
@@ -187,9 +238,17 @@ export async function createBooking(input: CreateBookingInput): Promise<Booking 
 
     if (error) {
         console.error('Error creating booking:', error);
-        return null;
+        return {
+            success: false,
+            error: 'database',
+            message: 'Failed to create booking. Please try again.'
+        };
     }
-    return data;
+
+    return {
+        success: true,
+        booking: data
+    };
 }
 
 export async function getBookings(propertyId: string): Promise<Booking[]> {
