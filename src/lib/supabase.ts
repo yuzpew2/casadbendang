@@ -237,6 +237,46 @@ export async function deleteBooking(id: string): Promise<boolean> {
     return true;
 }
 
+// Auto-cancel expired pending bookings (client-side alternative to cron)
+export async function cancelExpiredPendingBookings(propertyId: string, timeoutHours: number = 24): Promise<number> {
+    const supabase = createClient();
+
+    // Calculate cutoff time
+    const cutoffTime = new Date();
+    cutoffTime.setHours(cutoffTime.getHours() - timeoutHours);
+
+    // Find expired pending bookings
+    const { data: expiredBookings, error: fetchError } = await supabase
+        .from('bookings')
+        .select('id')
+        .eq('property_id', propertyId)
+        .eq('status', 'pending')
+        .lt('created_at', cutoffTime.toISOString());
+
+    if (fetchError || !expiredBookings?.length) {
+        return 0;
+    }
+
+    // Cancel them
+    const expiredIds = expiredBookings.map(b => b.id);
+    const { error: updateError } = await supabase
+        .from('bookings')
+        .update({
+            status: 'cancelled',
+            notes: `Auto-cancelled: No response within ${timeoutHours} hours`,
+            updated_at: new Date().toISOString()
+        })
+        .in('id', expiredIds);
+
+    if (updateError) {
+        console.error('Error auto-cancelling bookings:', updateError);
+        return 0;
+    }
+
+    console.log(`Auto-cancelled ${expiredBookings.length} expired pending bookings`);
+    return expiredBookings.length;
+}
+
 export async function createMaintenanceBlock(
     propertyId: string,
     startDate: string,

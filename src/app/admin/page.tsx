@@ -34,6 +34,7 @@ import {
     getBookings,
     updateBookingStatus,
     deleteBooking,
+    cancelExpiredPendingBookings,
     getAddOns,
     createAddOn,
     updateAddOn,
@@ -184,6 +185,14 @@ function OverviewTab() {
                 const propertyData = await getProperty();
                 if (propertyData) {
                     setProperty(propertyData);
+
+                    // Auto-cancel expired pending bookings on dashboard load
+                    const timeoutHours = propertyData.pending_timeout_hours || 24;
+                    const cancelledCount = await cancelExpiredPendingBookings(propertyData.id, timeoutHours);
+                    if (cancelledCount > 0) {
+                        toast.info(`Auto-cancelled ${cancelledCount} expired pending booking(s)`);
+                    }
+
                     const bookingsData = await getBookings(propertyData.id);
                     setBookings(bookingsData);
                 }
