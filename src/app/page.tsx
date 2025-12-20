@@ -238,7 +238,7 @@ export default function Home() {
                             />
                         </div>
                     )}
-                    <p className="font-bold text-xl uppercase tracking-widest text-primary">{propertyName}</p>
+                    <p className="font-[family-name:var(--font-playfair)] font-bold text-2xl tracking-wide text-primary italic">{propertyName}</p>
 
                     {/* Social Media Icons */}
                     {(socialLinks.instagram || socialLinks.facebook || socialLinks.tiktok) && (

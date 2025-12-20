@@ -71,7 +71,7 @@ export function Hero({ title, description, images }: HeroProps) {
 
             {/* Content */}
             <div className="relative flex h-full flex-col items-center justify-center px-4 text-center text-white">
-                <h1 className="text-5xl font-bold tracking-tight md:text-7xl drop-shadow-lg">
+                <h1 className="font-[family-name:var(--font-playfair)] text-5xl font-bold tracking-tight md:text-7xl drop-shadow-lg italic">
                     {title}
                 </h1>
                 <p className="mt-6 max-w-2xl text-lg md:text-xl drop-shadow">
@@ -96,8 +96,8 @@ export function Hero({ title, description, images }: HeroProps) {
                             key={index}
                             onClick={() => setCurrentIndex(index)}
                             className={`w-3 h-3 rounded-full transition-all ${index === currentIndex
-                                    ? "bg-white scale-110"
-                                    : "bg-white/50 hover:bg-white/75"
+                                ? "bg-white scale-110"
+                                : "bg-white/50 hover:bg-white/75"
                                 }`}
                             aria-label={`Go to image ${index + 1}`}
                         />
