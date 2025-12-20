@@ -24,7 +24,11 @@ import {
     Facebook,
     AlertCircle,
     Wifi,
-    Megaphone
+    Megaphone,
+    Users,
+    Tag,
+    Phone,
+    Mail
 } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -53,9 +57,13 @@ import {
     getCampaigns,
     createCampaign,
     updateCampaign,
-    deleteCampaign
+    deleteCampaign,
+    getGuests,
+    updateGuest,
+    addGuestTag,
+    removeGuestTag
 } from "@/lib/supabase";
-import type { Property, Booking, AddOn, PropertyImage, BookingStatus, Amenity, Campaign } from "@/types/database";
+import type { Property, Booking, AddOn, PropertyImage, BookingStatus, Amenity, Campaign, Guest } from "@/types/database";
 import { format, startOfMonth, endOfMonth, isWithinInterval, parseISO } from "date-fns";
 
 // TikTok icon
@@ -145,6 +153,12 @@ export default function AdminDashboard() {
                         onClick={() => setActiveTab("campaigns")}
                     />
                     <SidebarItem
+                        icon={<Users className="w-5 h-5" />}
+                        label="Guests"
+                        active={activeTab === "guests"}
+                        onClick={() => setActiveTab("guests")}
+                    />
+                    <SidebarItem
                         icon={<Settings className="w-5 h-5" />}
                         label="Settings"
                         active={activeTab === "settings"}
@@ -176,6 +190,7 @@ export default function AdminDashboard() {
                 {activeTab === "addons" && <AddOnsTab />}
                 {activeTab === "amenities" && <AmenitiesTab />}
                 {activeTab === "campaigns" && <CampaignsTab />}
+                {activeTab === "guests" && <GuestsTab />}
                 {activeTab === "bookings" && <BookingsTab />}
                 {activeTab === "images" && <ImagesTab />}
             </main>
@@ -1499,10 +1514,10 @@ function CampaignsTab() {
                                     <div
                                         key={campaign.id}
                                         className={`p-4 border rounded-lg ${isCurrentlyActive
-                                                ? "bg-green-50 border-green-200"
-                                                : isExpired
-                                                    ? "bg-slate-50 opacity-60"
-                                                    : "bg-white"
+                                            ? "bg-green-50 border-green-200"
+                                            : isExpired
+                                                ? "bg-slate-50 opacity-60"
+                                                : "bg-white"
                                             }`}
                                     >
                                         <div className="flex justify-between items-start">
@@ -1555,6 +1570,181 @@ function CampaignsTab() {
                                     </div>
                                 );
                             })}
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
+        </div>
+    );
+}
+
+function GuestsTab() {
+    const [property, setProperty] = useState<Property | null>(null);
+    const [guests, setGuests] = useState<Guest[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [searchTerm, setSearchTerm] = useState("");
+    const [editingTags, setEditingTags] = useState<string | null>(null);
+    const [startTagInput, setStartTagInput] = useState("");
+
+    const PREDEFINED_TAGS = ["VIP", "Repeat", "Family", "Couple", "Messy", "Late Checkout", "Early Checkin"];
+
+    useEffect(() => {
+        async function fetchData() {
+            try {
+                const propertyData = await getProperty();
+                if (propertyData) {
+                    setProperty(propertyData);
+                    const guestsData = await getGuests(propertyData.id);
+                    setGuests(guestsData);
+                }
+            } catch (error) {
+                console.error("Error fetching guests:", error);
+                toast.error("Failed to load guests");
+            } finally {
+                setIsLoading(false);
+            }
+        }
+        fetchData();
+    }, []);
+
+    const handleAddTag = async (guestId: string, tag: string) => {
+        const guest = guests.find(g => g.id === guestId);
+        if (!guest || guest.tags.includes(tag)) return;
+
+        try {
+            const updated = await addGuestTag(guestId, guest.tags, tag);
+            if (updated) {
+                setGuests(guests.map(g => g.id === guestId ? updated : g));
+                toast.success(`Tagged as ${tag}`);
+            }
+        } catch (error) {
+            toast.error("Failed to add tag");
+        }
+    };
+
+    const handleRemoveTag = async (guestId: string, tag: string) => {
+        const guest = guests.find(g => g.id === guestId);
+        if (!guest) return;
+
+        try {
+            const updated = await removeGuestTag(guestId, guest.tags, tag);
+            if (updated) {
+                setGuests(guests.map(g => g.id === guestId ? updated : g));
+                toast.success(`Tag ${tag} removed`);
+            }
+        } catch (error) {
+            toast.error("Failed to remove tag");
+        }
+    };
+
+    const filteredGuests = guests.filter(guest =>
+        guest.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        guest.phone.includes(searchTerm) ||
+        (guest.email && guest.email.toLowerCase().includes(searchTerm.toLowerCase()))
+    );
+
+    if (isLoading) {
+        return (
+            <div className="flex items-center justify-center h-64">
+                <Loader2 className="w-8 h-8 animate-spin" />
+            </div>
+        );
+    }
+
+    return (
+        <div className="space-y-6">
+            <div>
+                <h1 className="text-3xl font-bold">Guest CRM</h1>
+                <p className="text-muted-foreground">
+                    Manage guest profiles, history, and preferences.
+                </p>
+            </div>
+
+            <Card>
+                <CardHeader>
+                    <CardTitle>Guest List ({guests.length})</CardTitle>
+                    <div className="flex gap-4 mt-2">
+                        <Input
+                            placeholder="Search by name, phone, or email..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="max-w-sm"
+                        />
+                    </div>
+                </CardHeader>
+                <CardContent>
+                    {filteredGuests.length === 0 ? (
+                        <p className="text-muted-foreground text-center py-8">
+                            No guests found. Guests are automatically added when they book.
+                        </p>
+                    ) : (
+                        <div className="space-y-4">
+                            {filteredGuests.map((guest) => (
+                                <div key={guest.id} className="border rounded-lg p-4 bg-white shadow-sm">
+                                    <div className="flex justify-between items-start">
+                                        <div>
+                                            <div className="flex items-center gap-2">
+                                                <h3 className="font-bold text-lg">{guest.name}</h3>
+                                                <div className="flex gap-1">
+                                                    {guest.tags.map(tag => (
+                                                        <span key={tag} className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                                                            {tag}
+                                                            <button
+                                                                onClick={() => handleRemoveTag(guest.id, tag)}
+                                                                className="ml-1 text-blue-600 hover:text-blue-900"
+                                                            >
+                                                                <X className="w-3 h-3" />
+                                                            </button>
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                            <div className="text-sm text-muted-foreground grid grid-cols-2 gap-x-8 gap-y-1 mt-2">
+                                                <div className="flex items-center gap-2">
+                                                    <Phone className="w-4 h-4" /> {guest.phone}
+                                                </div>
+                                                {guest.email && (
+                                                    <div className="flex items-center gap-2">
+                                                        <Mail className="w-4 h-4" /> {guest.email}
+                                                    </div>
+                                                )}
+                                                <div className="flex items-center gap-2">
+                                                    <CalendarIcon className="w-4 h-4" /> Last Stay: {guest.last_stay_date || 'N/A'}
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <Package className="w-4 h-4" /> Total Stays: {guest.total_stays}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Tagging Interface */}
+                                        <div className="flex items-start gap-2">
+                                            <div className="dropdown relative group">
+                                                <Button variant="outline" size="sm" className="gap-2">
+                                                    <Tag className="w-4 h-4" />
+                                                    Add Tag
+                                                </Button>
+                                                <div className="absolute right-0 top-full mt-1 w-48 bg-white border rounded shadow-lg hidden group-hover:block z-50">
+                                                    {PREDEFINED_TAGS.map(tag => (
+                                                        <button
+                                                            key={tag}
+                                                            className="block w-full text-left px-4 py-2 text-sm hover:bg-gray-100"
+                                                            onClick={() => handleAddTag(guest.id, tag)}
+                                                        >
+                                                            {tag}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    {guest.notes && (
+                                        <div className="mt-3 p-2 bg-yellow-50 text-sm border-l-2 border-yellow-400">
+                                            <span className="font-semibold text-yellow-800">Note:</span> {guest.notes}
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
                         </div>
                     )}
                 </CardContent>

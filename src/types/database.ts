@@ -183,3 +183,38 @@ export interface UpdateCampaignInput {
     end_date?: string;
     is_active?: boolean;
 }
+
+// Guest CRM
+export interface Guest {
+    id: string;
+    property_id: string;
+    name: string;
+    phone: string;
+    email?: string;
+    tags: string[];
+    notes?: string;
+    last_stay_date?: string;
+    total_stays: number;
+    created_at: string;
+}
+
+export interface CreateGuestInput {
+    property_id: string;
+    name: string;
+    phone: string;
+    email?: string;
+    tags?: string[];
+    notes?: string;
+    last_stay_date?: string;
+    total_stays?: number;
+}
+
+export interface UpdateGuestInput {
+    name?: string;
+    phone?: string;
+    email?: string;
+    tags?: string[];
+    notes?: string;
+    last_stay_date?: string;
+    total_stays?: number;
+}

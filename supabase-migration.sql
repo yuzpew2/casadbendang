@@ -135,6 +135,40 @@ BEGIN
     END IF;
 END $$;
 
+-- 20. GUEST CRM (Database & Tagging)
+CREATE TABLE IF NOT EXISTS guests (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    property_id UUID REFERENCES properties(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    phone TEXT NOT NULL,
+    email TEXT,
+    tags TEXT[] DEFAULT '{}', -- e.g., ['VIP', 'Repeat', 'Messy']
+    notes TEXT,
+    last_stay_date DATE,
+    total_stays INT DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(property_id, phone)
+);
+
+-- 21. Link bookings to guests (Optional but good for history)
+-- We use DO block to avoid error if column exists
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'bookings' AND column_name = 'guest_id') THEN
+        ALTER TABLE bookings ADD COLUMN guest_id UUID REFERENCES guests(id);
+    END IF;
+END $$;
+
+-- 22. RLS for Guests
+ALTER TABLE guests ENABLE ROW LEVEL SECURITY;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'guests' AND policyname = 'Admin full access to guests') THEN
+        CREATE POLICY "Admin full access to guests" ON guests FOR ALL USING (auth.role() = 'authenticated');
+    END IF;
+END $$;
+
 SELECT 'Migration completed successfully! Remember to configure storage bucket policies.' as status;
 
 

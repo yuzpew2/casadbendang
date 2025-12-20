@@ -16,6 +16,9 @@ import type {
     UpdateAmenityInput,
     CreateCampaignInput,
     UpdateCampaignInput,
+    Guest,
+    CreateGuestInput,
+    UpdateGuestInput,
     BookingStatus,
     RoomCount
 } from '@/types/database';
@@ -654,6 +657,73 @@ export async function deleteCampaign(id: string): Promise<boolean> {
         return false;
     }
     return true;
+}
+
+// ============ GUEST CRM FUNCTIONS ============
+
+export async function getGuests(propertyId: string): Promise<Guest[]> {
+    const supabase = createClient();
+    const { data, error } = await supabase
+        .from('guests')
+        .select('*')
+        .eq('property_id', propertyId)
+        .order('name', { ascending: true });
+
+    if (error) {
+        console.error('Error fetching guests:', error);
+        return [];
+    }
+    return data || [];
+}
+
+export async function createGuest(input: CreateGuestInput): Promise<Guest | null> {
+    const supabase = createClient();
+    const { data, error } = await supabase
+        .from('guests')
+        .insert(input)
+        .select()
+        .single();
+
+    if (error) {
+        // Ignore duplicate errors if needed, or handle them
+        if (error.code === '23505') { // Unique violation
+            console.log('Guest already exists');
+            // Optionally, return existing guest logic here if desired
+        } else {
+            console.error('Error creating guest:', error);
+        }
+        return null;
+    }
+    return data;
+}
+
+export async function updateGuest(id: string, updates: UpdateGuestInput): Promise<Guest | null> {
+    const supabase = createClient();
+    const { data, error } = await supabase
+        .from('guests')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single();
+
+    if (error) {
+        console.error('Error updating guest:', error);
+        return null;
+    }
+    return data;
+}
+
+// Helper to add a tag
+export async function addGuestTag(guestId: string, currentTags: string[], newTag: string): Promise<Guest | null> {
+    if (currentTags.includes(newTag)) return null;
+    const updatedTags = [...currentTags, newTag];
+    return updateGuest(guestId, { tags: updatedTags });
+}
+
+// Helper to remove a tag
+export async function removeGuestTag(guestId: string, currentTags: string[], tagToRemove: string): Promise<Guest | null> {
+    const updatedTags = currentTags.filter(t => t !== tagToRemove);
+    return updateGuest(guestId, { tags: updatedTags });
 }
 
 
