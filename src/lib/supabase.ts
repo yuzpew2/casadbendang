@@ -4,12 +4,15 @@ import type {
     PropertyImage,
     Booking,
     AddOn,
+    Amenity,
     CreateBookingInput,
     UpdatePropertyInput,
     CreateAddOnInput,
     UpdateAddOnInput,
     CreatePropertyImageInput,
     UpdatePropertyImageInput,
+    CreateAmenityInput,
+    UpdateAmenityInput,
     BookingStatus,
     RoomCount
 } from '@/types/database';
@@ -489,3 +492,82 @@ export async function deleteStorageImage(path: string): Promise<boolean> {
     }
     return true;
 }
+
+// ============ AMENITY FUNCTIONS ============
+
+export async function getAmenities(propertyId: string): Promise<Amenity[]> {
+    const supabase = createClient();
+    const { data, error } = await supabase
+        .from('amenities')
+        .select('*')
+        .eq('property_id', propertyId)
+        .order('sort_order', { ascending: true });
+
+    if (error) {
+        console.error('Error fetching amenities:', error);
+        return [];
+    }
+    return data || [];
+}
+
+export async function getActiveAmenities(propertyId: string): Promise<Amenity[]> {
+    const supabase = createClient();
+    const { data, error } = await supabase
+        .from('amenities')
+        .select('*')
+        .eq('property_id', propertyId)
+        .eq('is_active', true)
+        .order('sort_order', { ascending: true });
+
+    if (error) {
+        console.error('Error fetching active amenities:', error);
+        return [];
+    }
+    return data || [];
+}
+
+export async function createAmenity(input: CreateAmenityInput): Promise<Amenity | null> {
+    const supabase = createClient();
+    const { data, error } = await supabase
+        .from('amenities')
+        .insert(input)
+        .select()
+        .single();
+
+    if (error) {
+        console.error('Error creating amenity:', error);
+        return null;
+    }
+    return data;
+}
+
+export async function updateAmenity(id: string, updates: UpdateAmenityInput): Promise<Amenity | null> {
+    const supabase = createClient();
+    const { data, error } = await supabase
+        .from('amenities')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single();
+
+    if (error) {
+        console.error('Error updating amenity:', error);
+        return null;
+    }
+    return data;
+}
+
+export async function deleteAmenity(id: string): Promise<boolean> {
+    const supabase = createClient();
+    const { error } = await supabase
+        .from('amenities')
+        .delete()
+        .eq('id', id);
+
+    if (error) {
+        console.error('Error deleting amenity:', error);
+        return false;
+    }
+    return true;
+}
+

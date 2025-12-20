@@ -27,6 +27,7 @@ export interface Property {
 
     // Settings
     pending_timeout_hours: number;
+    footer_description: string | null;
 
     created_at: string;
     updated_at: string;
@@ -99,6 +100,7 @@ export interface UpdatePropertyInput {
     tiktok_url?: string | null;
     logo_url?: string | null;
     pending_timeout_hours?: number;
+    footer_description?: string;
 }
 
 export interface CreateAddOnInput {
@@ -123,5 +125,29 @@ export interface CreatePropertyImageInput {
 export interface UpdatePropertyImageInput {
     url?: string;
     alt_text?: string;
+    sort_order?: number;
+}
+
+// Amenities
+export interface Amenity {
+    id: string;
+    property_id: string;
+    name: string;
+    icon: string;
+    is_active: boolean;
+    sort_order: number;
+    created_at: string;
+}
+
+export interface CreateAmenityInput {
+    property_id: string;
+    name: string;
+    icon?: string;
+}
+
+export interface UpdateAmenityInput {
+    name?: string;
+    icon?: string;
+    is_active?: boolean;
     sort_order?: number;
 }

@@ -15,9 +15,10 @@ interface SummaryCardProps {
     propertyId: string;
     whatsappNumber: string;
     propertyName: string;
+    timeoutHours?: number;
 }
 
-export function SummaryCard({ propertyId, whatsappNumber, propertyName }: SummaryCardProps) {
+export function SummaryCard({ propertyId, whatsappNumber, propertyName, timeoutHours = 24 }: SummaryCardProps) {
     const { dateRange, guestCount, roomCount, selectedAddOns, getTotalPrice, getNights, getRoomPrice } = useBookingStore();
     const [isLoading, setIsLoading] = useState(false);
     const [guestName, setGuestName] = useState("");
@@ -183,7 +184,7 @@ export function SummaryCard({ propertyId, whatsappNumber, propertyName }: Summar
                 {/* Auto-cancel warning */}
                 <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm">
                     <p className="text-amber-800">
-                        <strong>⏰ Important:</strong> Please confirm your booking via WhatsApp within 24 hours.
+                        <strong>⏰ Important:</strong> Please confirm your booking via WhatsApp within {timeoutHours} hours.
                         Unconfirmed bookings will be automatically cancelled to free up dates for other guests.
                     </p>
                 </div>

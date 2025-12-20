@@ -207,6 +207,7 @@ export default function Home() {
                             propertyId={propertyId}
                             propertyName={propertyName}
                             whatsappNumber={whatsappNumber}
+                            timeoutHours={property?.pending_timeout_hours || 24}
                         />
                     </div>
                 </div>
