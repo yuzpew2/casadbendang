@@ -22,7 +22,8 @@ import {
     GripVertical,
     Instagram,
     Facebook,
-    AlertCircle
+    AlertCircle,
+    Wifi
 } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -43,9 +44,13 @@ import {
     createPropertyImage,
     deletePropertyImage,
     uploadImage,
-    reorderPropertyImages
+    reorderPropertyImages,
+    getAmenities,
+    createAmenity,
+    updateAmenity,
+    deleteAmenity
 } from "@/lib/supabase";
-import type { Property, Booking, AddOn, PropertyImage, BookingStatus } from "@/types/database";
+import type { Property, Booking, AddOn, PropertyImage, BookingStatus, Amenity } from "@/types/database";
 import { format, startOfMonth, endOfMonth, isWithinInterval, parseISO } from "date-fns";
 
 // TikTok icon
@@ -123,6 +128,12 @@ export default function AdminDashboard() {
                         onClick={() => setActiveTab("addons")}
                     />
                     <SidebarItem
+                        icon={<Wifi className="w-5 h-5" />}
+                        label="Amenities"
+                        active={activeTab === "amenities"}
+                        onClick={() => setActiveTab("amenities")}
+                    />
+                    <SidebarItem
                         icon={<Settings className="w-5 h-5" />}
                         label="Settings"
                         active={activeTab === "settings"}
@@ -152,6 +163,7 @@ export default function AdminDashboard() {
                 {activeTab === "overview" && <OverviewTab />}
                 {activeTab === "settings" && <SettingsTab onUpdate={setProperty} />}
                 {activeTab === "addons" && <AddOnsTab />}
+                {activeTab === "amenities" && <AmenitiesTab />}
                 {activeTab === "bookings" && <BookingsTab />}
                 {activeTab === "images" && <ImagesTab />}
             </main>
@@ -405,6 +417,7 @@ function SettingsTab({ onUpdate }: { onUpdate: (property: Property) => void }) {
         tiktok_url: "",
         logo_url: "",
         pending_timeout_hours: 24,
+        footer_description: "",
     });
 
     useEffect(() => {
@@ -426,6 +439,7 @@ function SettingsTab({ onUpdate }: { onUpdate: (property: Property) => void }) {
                         tiktok_url: data.tiktok_url || "",
                         logo_url: data.logo_url || "",
                         pending_timeout_hours: data.pending_timeout_hours || 24,
+                        footer_description: data.footer_description || "",
                     });
                 }
             } catch (error) {
@@ -588,6 +602,17 @@ function SettingsTab({ onUpdate }: { onUpdate: (property: Property) => void }) {
                             onChange={(e) => setFormData({ ...formData, max_guests: parseInt(e.target.value) || 1 })}
                             className="w-32"
                         />
+                    </div>
+                    <div className="space-y-2">
+                        <label className="text-sm font-medium">Footer Description</label>
+                        <Input
+                            placeholder="e.g., Dedicated to providing cozy tropical experiences."
+                            value={formData.footer_description}
+                            onChange={(e) => setFormData({ ...formData, footer_description: e.target.value })}
+                        />
+                        <p className="text-xs text-muted-foreground">
+                            Shown at the bottom of the website next to your property name.
+                        </p>
                     </div>
                 </CardContent>
             </Card>
@@ -1068,6 +1093,175 @@ function AddOnsTab() {
                             )}
                         </tbody>
                     </table>
+                </CardContent>
+            </Card>
+        </div>
+    );
+}
+
+function AmenitiesTab() {
+    const [property, setProperty] = useState<Property | null>(null);
+    const [amenities, setAmenities] = useState<Amenity[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [newName, setNewName] = useState("");
+    const [newIcon, setNewIcon] = useState("Check");
+
+    useEffect(() => {
+        async function fetchData() {
+            try {
+                const propertyData = await getProperty();
+                if (propertyData) {
+                    setProperty(propertyData);
+                    const amenitiesData = await getAmenities(propertyData.id);
+                    setAmenities(amenitiesData);
+                }
+            } catch (error) {
+                console.error("Error fetching amenities:", error);
+            } finally {
+                setIsLoading(false);
+            }
+        }
+        fetchData();
+    }, []);
+
+    const handleAddNew = async () => {
+        if (!newName.trim() || !property) return;
+
+        try {
+            const amenity = await createAmenity({
+                property_id: property.id,
+                name: newName.trim(),
+                icon: newIcon || "Check",
+            });
+
+            if (amenity) {
+                setAmenities([...amenities, amenity]);
+                setNewName("");
+                setNewIcon("Check");
+                toast.success("Amenity added!");
+            }
+        } catch (error) {
+            toast.error("Failed to add amenity");
+        }
+    };
+
+    const handleDelete = async (id: string) => {
+        try {
+            const success = await deleteAmenity(id);
+            if (success) {
+                setAmenities(amenities.filter(a => a.id !== id));
+                toast.success("Amenity deleted");
+            }
+        } catch (error) {
+            toast.error("Failed to delete amenity");
+        }
+    };
+
+    const handleToggleActive = async (amenity: Amenity) => {
+        try {
+            const updated = await updateAmenity(amenity.id, { is_active: !amenity.is_active });
+            if (updated) {
+                setAmenities(amenities.map(a => a.id === amenity.id ? updated : a));
+                toast.success(`Amenity ${updated.is_active ? 'enabled' : 'disabled'}`);
+            }
+        } catch (error) {
+            toast.error("Failed to update amenity");
+        }
+    };
+
+    if (isLoading) {
+        return (
+            <div className="flex items-center justify-center h-64">
+                <Loader2 className="w-8 h-8 animate-spin" />
+            </div>
+        );
+    }
+
+    const iconOptions = ["Waves", "Mountain", "UtensilsCrossed", "Car", "Wind", "Wifi", "Tv", "WashingMachine", "Check", "Coffee", "Bed", "Bath"];
+
+    return (
+        <div className="space-y-6">
+            <div>
+                <h1 className="text-3xl font-bold">Amenities</h1>
+                <p className="text-muted-foreground">
+                    Manage property amenities displayed to customers
+                </p>
+            </div>
+
+            {/* Add New Amenity */}
+            <Card>
+                <CardHeader>
+                    <CardTitle>Add New Amenity</CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <div className="flex gap-4">
+                        <Input
+                            placeholder="e.g., Swimming Pool"
+                            value={newName}
+                            onChange={(e) => setNewName(e.target.value)}
+                            className="flex-1"
+                        />
+                        <select
+                            value={newIcon}
+                            onChange={(e) => setNewIcon(e.target.value)}
+                            className="px-3 py-2 border rounded-md"
+                        >
+                            {iconOptions.map(icon => (
+                                <option key={icon} value={icon}>{icon}</option>
+                            ))}
+                        </select>
+                        <Button onClick={handleAddNew} disabled={!newName.trim()}>
+                            <Plus className="w-4 h-4 mr-2" />
+                            Add
+                        </Button>
+                    </div>
+                </CardContent>
+            </Card>
+
+            {/* Amenities List */}
+            <Card>
+                <CardHeader>
+                    <CardTitle>Current Amenities ({amenities.length})</CardTitle>
+                </CardHeader>
+                <CardContent>
+                    {amenities.length === 0 ? (
+                        <p className="text-muted-foreground text-center py-8">
+                            No amenities yet. Add your first amenity above.
+                        </p>
+                    ) : (
+                        <div className="space-y-2">
+                            {amenities.map((amenity) => (
+                                <div
+                                    key={amenity.id}
+                                    className={`flex items-center justify-between p-4 border rounded-lg ${amenity.is_active ? "bg-white" : "bg-slate-50 opacity-60"
+                                        }`}
+                                >
+                                    <div className="flex items-center gap-4">
+                                        <span className="text-sm text-muted-foreground w-24">
+                                            Icon: {amenity.icon}
+                                        </span>
+                                        <span className="font-medium">{amenity.name}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <Button
+                                            variant={amenity.is_active ? "outline" : "default"}
+                                            size="sm"
+                                            onClick={() => handleToggleActive(amenity)}
+                                        >
+                                            {amenity.is_active ? "Disable" : "Enable"}
+                                        </Button>
+                                        <Button
+                                            variant="destructive"
+                                            size="sm"
+                                            onClick={() => handleDelete(amenity.id)}
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                        </Button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
                 </CardContent>
             </Card>
         </div>
