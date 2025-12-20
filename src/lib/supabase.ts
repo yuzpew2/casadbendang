@@ -5,6 +5,7 @@ import type {
     Booking,
     AddOn,
     Amenity,
+    Campaign,
     CreateBookingInput,
     UpdatePropertyInput,
     CreateAddOnInput,
@@ -13,6 +14,8 @@ import type {
     UpdatePropertyImageInput,
     CreateAmenityInput,
     UpdateAmenityInput,
+    CreateCampaignInput,
+    UpdateCampaignInput,
     BookingStatus,
     RoomCount
 } from '@/types/database';
@@ -570,4 +573,87 @@ export async function deleteAmenity(id: string): Promise<boolean> {
     }
     return true;
 }
+
+// ============ CAMPAIGN FUNCTIONS ============
+
+export async function getCampaigns(propertyId: string): Promise<Campaign[]> {
+    const supabase = createClient();
+    const { data, error } = await supabase
+        .from('campaigns')
+        .select('*')
+        .eq('property_id', propertyId)
+        .order('created_at', { ascending: false });
+
+    if (error) {
+        console.error('Error fetching campaigns:', error);
+        return [];
+    }
+    return data || [];
+}
+
+export async function getActiveCampaigns(propertyId: string): Promise<Campaign[]> {
+    const supabase = createClient();
+    const now = new Date().toISOString();
+
+    const { data, error } = await supabase
+        .from('campaigns')
+        .select('*')
+        .eq('property_id', propertyId)
+        .eq('is_active', true)
+        .lte('start_date', now)
+        .gte('end_date', now)
+        .order('created_at', { ascending: false });
+
+    if (error) {
+        console.error('Error fetching active campaigns:', error);
+        return [];
+    }
+    return data || [];
+}
+
+export async function createCampaign(input: CreateCampaignInput): Promise<Campaign | null> {
+    const supabase = createClient();
+    const { data, error } = await supabase
+        .from('campaigns')
+        .insert(input)
+        .select()
+        .single();
+
+    if (error) {
+        console.error('Error creating campaign:', error);
+        return null;
+    }
+    return data;
+}
+
+export async function updateCampaign(id: string, updates: UpdateCampaignInput): Promise<Campaign | null> {
+    const supabase = createClient();
+    const { data, error } = await supabase
+        .from('campaigns')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single();
+
+    if (error) {
+        console.error('Error updating campaign:', error);
+        return null;
+    }
+    return data;
+}
+
+export async function deleteCampaign(id: string): Promise<boolean> {
+    const supabase = createClient();
+    const { error } = await supabase
+        .from('campaigns')
+        .delete()
+        .eq('id', id);
+
+    if (error) {
+        console.error('Error deleting campaign:', error);
+        return false;
+    }
+    return true;
+}
+
 

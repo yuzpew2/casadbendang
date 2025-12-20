@@ -11,8 +11,15 @@ import { RoomSelector } from "@/components/booking/RoomSelector";
 import { AddOnSelector } from "@/components/booking/AddOnSelector";
 import { SummaryCard } from "@/components/booking/SummaryCard";
 import { useBookingStore } from "@/store/useBookingStore";
-import { getProperty, getActiveAddOns, getPropertyImages, getActiveAmenities } from "@/lib/supabase";
-import type { Property, AddOn, PropertyImage, Amenity } from "@/types/database";
+import { getProperty, getActiveAddOns, getPropertyImages, getActiveAmenities, getActiveCampaigns } from "@/lib/supabase";
+import type { Property, AddOn, PropertyImage, Amenity, Campaign } from "@/types/database";
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 import {
     Waves,
     Mountain,
@@ -63,6 +70,8 @@ export default function Home() {
     const [addOns, setAddOns] = useState<AddOn[]>([]);
     const [images, setImages] = useState<PropertyImage[]>([]);
     const [amenities, setAmenities] = useState<Amenity[]>([]);
+    const [activeCampaign, setActiveCampaign] = useState<Campaign | null>(null);
+    const [showCampaign, setShowCampaign] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
@@ -78,14 +87,21 @@ export default function Home() {
                         price_6_rooms: propertyData.price_6_rooms,
                     });
 
-                    const [addOnsData, imagesData, amenitiesData] = await Promise.all([
+                    const [addOnsData, imagesData, amenitiesData, campaignsData] = await Promise.all([
                         getActiveAddOns(propertyData.id),
                         getPropertyImages(propertyData.id),
-                        getActiveAmenities(propertyData.id)
+                        getActiveAmenities(propertyData.id),
+                        getActiveCampaigns(propertyData.id)
                     ]);
                     setAddOns(addOnsData);
                     setImages(imagesData);
                     setAmenities(amenitiesData);
+
+                    // Show campaign popup if there's an active campaign
+                    if (campaignsData.length > 0) {
+                        setActiveCampaign(campaignsData[0]);
+                        setShowCampaign(true);
+                    }
                 }
             } catch (error) {
                 console.error("Error fetching property data:", error);
@@ -224,6 +240,19 @@ export default function Home() {
                 />
             )}
 
+            {/* Google Maps Section */}
+            {property?.google_maps_url && (
+                <section className="container mx-auto px-4 py-12">
+                    <h2 className="text-3xl font-bold mb-6 text-center">Find Us</h2>
+                    <div className="w-full h-[400px] rounded-xl overflow-hidden shadow-lg border">
+                        <div
+                            className="w-full h-full"
+                            dangerouslySetInnerHTML={{ __html: property.google_maps_url }}
+                        />
+                    </div>
+                </section>
+            )}
+
             {/* Footer with Social Links */}
             <footer className="bg-white border-t py-12">
                 <div className="container mx-auto px-4 text-center">
@@ -281,6 +310,38 @@ export default function Home() {
                     </p>
                 </div>
             </footer>
+
+            {/* Campaign Popup */}
+            {showCampaign && activeCampaign && (
+                <Dialog open={showCampaign} onOpenChange={setShowCampaign}>
+                    <DialogContent className="sm:max-w-md">
+                        <DialogHeader>
+                            <DialogTitle className="text-2xl font-bold text-primary text-center">
+                                {activeCampaign.title}
+                            </DialogTitle>
+                        </DialogHeader>
+                        <div className="space-y-4">
+                            {/* We don't have image upload for campaigns yet, but support it in UI */}
+                            {activeCampaign.image_url && (
+                                <div className="relative h-48 w-full rounded-lg overflow-hidden">
+                                    <Image
+                                        src={activeCampaign.image_url}
+                                        fill
+                                        className="object-cover"
+                                        alt={activeCampaign.title}
+                                    />
+                                </div>
+                            )}
+                            <p className="text-lg text-center">{activeCampaign.message}</p>
+                            <div className="flex gap-2 justify-center pt-2">
+                                <Button className="w-full" onClick={() => setShowCampaign(false)}>
+                                    Okay, got it!
+                                </Button>
+                            </div>
+                        </div>
+                    </DialogContent>
+                </Dialog>
+            )}
         </div>
     );
 }

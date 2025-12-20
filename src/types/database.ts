@@ -28,6 +28,7 @@ export interface Property {
     // Settings
     pending_timeout_hours: number;
     footer_description: string | null;
+    google_maps_url: string | null;
 
     created_at: string;
     updated_at: string;
@@ -150,4 +151,35 @@ export interface UpdateAmenityInput {
     icon?: string;
     is_active?: boolean;
     sort_order?: number;
+}
+
+// Campaigns
+export interface Campaign {
+    id: string;
+    property_id: string;
+    title: string;
+    message: string;
+    image_url: string | null;
+    start_date: string;
+    end_date: string;
+    is_active: boolean;
+    created_at: string;
+}
+
+export interface CreateCampaignInput {
+    property_id: string;
+    title: string;
+    message: string;
+    image_url?: string;
+    start_date: string;
+    end_date: string;
+}
+
+export interface UpdateCampaignInput {
+    title?: string;
+    message?: string;
+    image_url?: string;
+    start_date?: string;
+    end_date?: string;
+    is_active?: boolean;
 }

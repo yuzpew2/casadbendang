@@ -23,7 +23,8 @@ import {
     Instagram,
     Facebook,
     AlertCircle,
-    Wifi
+    Wifi,
+    Megaphone
 } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -48,9 +49,13 @@ import {
     getAmenities,
     createAmenity,
     updateAmenity,
-    deleteAmenity
+    deleteAmenity,
+    getCampaigns,
+    createCampaign,
+    updateCampaign,
+    deleteCampaign
 } from "@/lib/supabase";
-import type { Property, Booking, AddOn, PropertyImage, BookingStatus, Amenity } from "@/types/database";
+import type { Property, Booking, AddOn, PropertyImage, BookingStatus, Amenity, Campaign } from "@/types/database";
 import { format, startOfMonth, endOfMonth, isWithinInterval, parseISO } from "date-fns";
 
 // TikTok icon
@@ -134,6 +139,12 @@ export default function AdminDashboard() {
                         onClick={() => setActiveTab("amenities")}
                     />
                     <SidebarItem
+                        icon={<Megaphone className="w-5 h-5" />}
+                        label="Campaigns"
+                        active={activeTab === "campaigns"}
+                        onClick={() => setActiveTab("campaigns")}
+                    />
+                    <SidebarItem
                         icon={<Settings className="w-5 h-5" />}
                         label="Settings"
                         active={activeTab === "settings"}
@@ -164,6 +175,7 @@ export default function AdminDashboard() {
                 {activeTab === "settings" && <SettingsTab onUpdate={setProperty} />}
                 {activeTab === "addons" && <AddOnsTab />}
                 {activeTab === "amenities" && <AmenitiesTab />}
+                {activeTab === "campaigns" && <CampaignsTab />}
                 {activeTab === "bookings" && <BookingsTab />}
                 {activeTab === "images" && <ImagesTab />}
             </main>
@@ -418,6 +430,7 @@ function SettingsTab({ onUpdate }: { onUpdate: (property: Property) => void }) {
         logo_url: "",
         pending_timeout_hours: 24,
         footer_description: "",
+        google_maps_url: "",
     });
 
     useEffect(() => {
@@ -440,6 +453,7 @@ function SettingsTab({ onUpdate }: { onUpdate: (property: Property) => void }) {
                         logo_url: data.logo_url || "",
                         pending_timeout_hours: data.pending_timeout_hours || 24,
                         footer_description: data.footer_description || "",
+                        google_maps_url: data.google_maps_url || "",
                     });
                 }
             } catch (error) {
@@ -722,6 +736,37 @@ function SettingsTab({ onUpdate }: { onUpdate: (property: Property) => void }) {
                             Recommended: 24-48 hours. This gives guests time to confirm while keeping your calendar accurate.
                         </p>
                     </div>
+                </CardContent>
+            </Card>
+
+            {/* Google Maps */}
+            <Card>
+                <CardHeader>
+                    <CardTitle>Location</CardTitle>
+                    <CardDescription>Add a Google Maps embed to show your property location</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    <div className="space-y-2">
+                        <label className="text-sm font-medium">Google Maps Embed Code</label>
+                        <textarea
+                            placeholder='<iframe src="https://www.google.com/maps/embed?pb=..." width="600" height="450" ...></iframe>'
+                            value={formData.google_maps_url}
+                            onChange={(e) => setFormData({ ...formData, google_maps_url: e.target.value })}
+                            className="w-full min-h-[100px] p-3 border rounded-md text-sm font-mono"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                            Go to Google Maps → Search your location → Click Share → Embed a map → Copy the HTML iframe code and paste here.
+                        </p>
+                    </div>
+                    {formData.google_maps_url && (
+                        <div className="mt-4">
+                            <p className="text-sm font-medium mb-2">Preview:</p>
+                            <div
+                                className="w-full h-[200px] rounded-lg overflow-hidden border"
+                                dangerouslySetInnerHTML={{ __html: formData.google_maps_url }}
+                            />
+                        </div>
+                    )}
                 </CardContent>
             </Card>
 
@@ -1260,6 +1305,256 @@ function AmenitiesTab() {
                                     </div>
                                 </div>
                             ))}
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
+        </div>
+    );
+}
+
+function CampaignsTab() {
+    const [property, setProperty] = useState<Property | null>(null);
+    const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [isCreating, setIsCreating] = useState(false);
+    const [newCampaign, setNewCampaign] = useState({
+        title: "",
+        message: "",
+        start_date: "",
+        end_date: "",
+    });
+
+    useEffect(() => {
+        async function fetchData() {
+            try {
+                const propertyData = await getProperty();
+                if (propertyData) {
+                    setProperty(propertyData);
+                    const campaignsData = await getCampaigns(propertyData.id);
+                    setCampaigns(campaignsData);
+                }
+            } catch (error) {
+                console.error("Error fetching campaigns:", error);
+            } finally {
+                setIsLoading(false);
+            }
+        }
+        fetchData();
+    }, []);
+
+    const handleCreate = async () => {
+        if (!newCampaign.title.trim() || !newCampaign.message.trim() || !property) return;
+        if (!newCampaign.start_date || !newCampaign.end_date) {
+            toast.error("Please set start and end dates");
+            return;
+        }
+
+        setIsCreating(true);
+        try {
+            const campaign = await createCampaign({
+                property_id: property.id,
+                title: newCampaign.title.trim(),
+                message: newCampaign.message.trim(),
+                start_date: new Date(newCampaign.start_date).toISOString(),
+                end_date: new Date(newCampaign.end_date).toISOString(),
+            });
+
+            if (campaign) {
+                setCampaigns([campaign, ...campaigns]);
+                setNewCampaign({ title: "", message: "", start_date: "", end_date: "" });
+                toast.success("Campaign created!");
+            }
+        } catch (error) {
+            toast.error("Failed to create campaign");
+        } finally {
+            setIsCreating(false);
+        }
+    };
+
+    const handleToggleActive = async (campaign: Campaign) => {
+        try {
+            const updated = await updateCampaign(campaign.id, { is_active: !campaign.is_active });
+            if (updated) {
+                setCampaigns(campaigns.map(c => c.id === campaign.id ? updated : c));
+                toast.success(`Campaign ${updated.is_active ? 'activated' : 'deactivated'}`);
+            }
+        } catch (error) {
+            toast.error("Failed to update campaign");
+        }
+    };
+
+    const handleDelete = async (id: string) => {
+        try {
+            const success = await deleteCampaign(id);
+            if (success) {
+                setCampaigns(campaigns.filter(c => c.id !== id));
+                toast.success("Campaign deleted");
+            }
+        } catch (error) {
+            toast.error("Failed to delete campaign");
+        }
+    };
+
+    if (isLoading) {
+        return (
+            <div className="flex items-center justify-center h-64">
+                <Loader2 className="w-8 h-8 animate-spin" />
+            </div>
+        );
+    }
+
+    const now = new Date();
+
+    return (
+        <div className="space-y-6">
+            <div>
+                <h1 className="text-3xl font-bold">Marketing Campaigns</h1>
+                <p className="text-muted-foreground">
+                    Create promotional popups that appear to customers when they visit your site
+                </p>
+            </div>
+
+            {/* Create New Campaign */}
+            <Card>
+                <CardHeader>
+                    <CardTitle>Create New Campaign</CardTitle>
+                    <CardDescription>Promotions will display as a popup to visitors during the active period</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    <div className="space-y-2">
+                        <label className="text-sm font-medium">Campaign Title</label>
+                        <Input
+                            placeholder="e.g., School Holiday Special - 20% Off!"
+                            value={newCampaign.title}
+                            onChange={(e) => setNewCampaign({ ...newCampaign, title: e.target.value })}
+                        />
+                    </div>
+                    <div className="space-y-2">
+                        <label className="text-sm font-medium">Message</label>
+                        <textarea
+                            placeholder="Describe your promotion..."
+                            value={newCampaign.message}
+                            onChange={(e) => setNewCampaign({ ...newCampaign, message: e.target.value })}
+                            className="w-full min-h-[100px] p-3 border rounded-md"
+                        />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium">Start Date</label>
+                            <Input
+                                type="date"
+                                value={newCampaign.start_date}
+                                onChange={(e) => setNewCampaign({ ...newCampaign, start_date: e.target.value })}
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium">End Date</label>
+                            <Input
+                                type="date"
+                                value={newCampaign.end_date}
+                                onChange={(e) => setNewCampaign({ ...newCampaign, end_date: e.target.value })}
+                            />
+                        </div>
+                    </div>
+                    <Button
+                        onClick={handleCreate}
+                        disabled={!newCampaign.title.trim() || !newCampaign.message.trim() || isCreating}
+                    >
+                        {isCreating ? (
+                            <>
+                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                Creating...
+                            </>
+                        ) : (
+                            <>
+                                <Megaphone className="w-4 h-4 mr-2" />
+                                Launch Campaign
+                            </>
+                        )}
+                    </Button>
+                </CardContent>
+            </Card>
+
+            {/* Campaigns List */}
+            <Card>
+                <CardHeader>
+                    <CardTitle>Your Campaigns ({campaigns.length})</CardTitle>
+                </CardHeader>
+                <CardContent>
+                    {campaigns.length === 0 ? (
+                        <p className="text-muted-foreground text-center py-8">
+                            No campaigns yet. Create your first campaign above.
+                        </p>
+                    ) : (
+                        <div className="space-y-4">
+                            {campaigns.map((campaign) => {
+                                const startDate = new Date(campaign.start_date);
+                                const endDate = new Date(campaign.end_date);
+                                const isCurrentlyActive = campaign.is_active && now >= startDate && now <= endDate;
+                                const isExpired = now > endDate;
+                                const isUpcoming = now < startDate;
+
+                                return (
+                                    <div
+                                        key={campaign.id}
+                                        className={`p-4 border rounded-lg ${isCurrentlyActive
+                                                ? "bg-green-50 border-green-200"
+                                                : isExpired
+                                                    ? "bg-slate-50 opacity-60"
+                                                    : "bg-white"
+                                            }`}
+                                    >
+                                        <div className="flex justify-between items-start">
+                                            <div className="flex-1">
+                                                <div className="flex items-center gap-2 mb-2">
+                                                    <h3 className="font-bold text-lg">{campaign.title}</h3>
+                                                    {isCurrentlyActive && (
+                                                        <span className="px-2 py-0.5 text-xs bg-green-500 text-white rounded-full">
+                                                            LIVE
+                                                        </span>
+                                                    )}
+                                                    {isExpired && (
+                                                        <span className="px-2 py-0.5 text-xs bg-slate-400 text-white rounded-full">
+                                                            EXPIRED
+                                                        </span>
+                                                    )}
+                                                    {isUpcoming && campaign.is_active && (
+                                                        <span className="px-2 py-0.5 text-xs bg-blue-500 text-white rounded-full">
+                                                            UPCOMING
+                                                        </span>
+                                                    )}
+                                                    {!campaign.is_active && (
+                                                        <span className="px-2 py-0.5 text-xs bg-slate-400 text-white rounded-full">
+                                                            DISABLED
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <p className="text-muted-foreground mb-2">{campaign.message}</p>
+                                                <p className="text-sm text-muted-foreground">
+                                                    {format(startDate, "MMM d, yyyy")} - {format(endDate, "MMM d, yyyy")}
+                                                </p>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <Button
+                                                    variant={campaign.is_active ? "outline" : "default"}
+                                                    size="sm"
+                                                    onClick={() => handleToggleActive(campaign)}
+                                                >
+                                                    {campaign.is_active ? "Disable" : "Enable"}
+                                                </Button>
+                                                <Button
+                                                    variant="destructive"
+                                                    size="sm"
+                                                    onClick={() => handleDelete(campaign.id)}
+                                                >
+                                                    <Trash2 className="w-4 h-4" />
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
                         </div>
                     )}
                 </CardContent>

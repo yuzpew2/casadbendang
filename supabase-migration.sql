@@ -99,5 +99,42 @@ END $$;
 -- CREATE POLICY "Auth upload" ON storage.objects FOR INSERT WITH CHECK (bucket_id = 'property-images');
 -- CREATE POLICY "Auth delete" ON storage.objects FOR DELETE USING (bucket_id = 'property-images');
 
+-- 15. Add Google Maps URL to properties
+ALTER TABLE properties 
+ADD COLUMN IF NOT EXISTS google_maps_url TEXT;
+
+-- 16. Create campaigns table for marketing promotions
+CREATE TABLE IF NOT EXISTS campaigns (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    property_id UUID REFERENCES properties(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    message TEXT NOT NULL,
+    image_url TEXT,
+    start_date TIMESTAMPTZ NOT NULL,
+    end_date TIMESTAMPTZ NOT NULL,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 17. Index for campaigns
+CREATE INDEX IF NOT EXISTS idx_campaigns_property_id ON campaigns(property_id);
+CREATE INDEX IF NOT EXISTS idx_campaigns_dates ON campaigns(start_date, end_date);
+
+-- 18. Enable RLS on campaigns
+ALTER TABLE campaigns ENABLE ROW LEVEL SECURITY;
+
+-- 19. RLS Policies for campaigns
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'campaigns' AND policyname = 'Public can view active campaigns') THEN
+        CREATE POLICY "Public can view active campaigns" ON campaigns FOR SELECT USING (is_active = true AND NOW() BETWEEN start_date AND end_date);
+    END IF;
+    
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'campaigns' AND policyname = 'Admin full access to campaigns') THEN
+        CREATE POLICY "Admin full access to campaigns" ON campaigns FOR ALL USING (auth.role() = 'authenticated');
+    END IF;
+END $$;
+
 SELECT 'Migration completed successfully! Remember to configure storage bucket policies.' as status;
+
 
