@@ -11,8 +11,8 @@ import { RoomSelector } from "@/components/booking/RoomSelector";
 import { AddOnSelector } from "@/components/booking/AddOnSelector";
 import { SummaryCard } from "@/components/booking/SummaryCard";
 import { useBookingStore } from "@/store/useBookingStore";
-import { getProperty, getActiveAddOns, getPropertyImages, getActiveAmenities, getActiveCampaigns } from "@/lib/supabase";
-import type { Property, AddOn, PropertyImage, Amenity, Campaign } from "@/types/database";
+import { getProperty, getActiveAddOns, getPropertyImages, getActiveAmenities, getActiveCampaigns, getSocialPosts } from "@/lib/supabase";
+import type { Property, AddOn, PropertyImage, Amenity, Campaign, SocialPost } from "@/types/database";
 import {
     Dialog,
     DialogContent,
@@ -71,6 +71,7 @@ export default function Home() {
     const [images, setImages] = useState<PropertyImage[]>([]);
     const [amenities, setAmenities] = useState<Amenity[]>([]);
     const [activeCampaign, setActiveCampaign] = useState<Campaign | null>(null);
+    const [socialPosts, setSocialPosts] = useState<SocialPost[]>([]);
     const [showCampaign, setShowCampaign] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
 
@@ -87,15 +88,17 @@ export default function Home() {
                         price_6_rooms: propertyData.price_6_rooms,
                     });
 
-                    const [addOnsData, imagesData, amenitiesData, campaignsData] = await Promise.all([
+                    const [addOnsData, imagesData, amenitiesData, campaignsData, socialPostsData] = await Promise.all([
                         getActiveAddOns(propertyData.id),
                         getPropertyImages(propertyData.id),
                         getActiveAmenities(propertyData.id),
-                        getActiveCampaigns(propertyData.id)
+                        getActiveCampaigns(propertyData.id),
+                        getSocialPosts(propertyData.id)
                     ]);
                     setAddOns(addOnsData);
                     setImages(imagesData);
                     setAmenities(amenitiesData);
+                    setSocialPosts(socialPostsData);
 
                     // Show campaign popup if there's an active campaign
                     if (campaignsData.length > 0) {
@@ -238,6 +241,29 @@ export default function Home() {
                     images={images.map(img => ({ url: img.url, alt_text: img.alt_text }))}
                     title="Explore Our Homestay"
                 />
+            )}
+
+            {/* Social Wall */}
+            {socialPosts.length > 0 && (
+                <section className="container mx-auto px-4 py-12 bg-gray-50">
+                    <h2 className="text-3xl font-bold mb-8 text-center text-primary font-[family-name:var(--font-playfair-display)] italic">
+                        Social Highlights
+                    </h2>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {socialPosts.map((post) => (
+                            <div key={post.id} className="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-lg transition-shadow flex flex-col">
+                                <div className="flex-1 flex justify-center items-center p-4 bg-gray-100/50">
+                                    <div className="w-full overflow-hidden flex justify-center" dangerouslySetInnerHTML={{ __html: post.embed_code }} />
+                                </div>
+                                {post.caption && (
+                                    <div className="p-4 border-t">
+                                        <p className="text-sm text-gray-600 line-clamp-3">{post.caption}</p>
+                                    </div>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                </section>
             )}
 
             {/* Google Maps Section */}

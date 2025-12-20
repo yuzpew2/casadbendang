@@ -19,6 +19,9 @@ import type {
     Guest,
     CreateGuestInput,
     UpdateGuestInput,
+    SocialPost,
+    CreateSocialPostInput,
+    UpdateSocialPostInput,
     BookingStatus,
     RoomCount
 } from '@/types/database';
@@ -724,6 +727,72 @@ export async function addGuestTag(guestId: string, currentTags: string[], newTag
 export async function removeGuestTag(guestId: string, currentTags: string[], tagToRemove: string): Promise<Guest | null> {
     const updatedTags = currentTags.filter(t => t !== tagToRemove);
     return updateGuest(guestId, { tags: updatedTags });
+}
+
+// ============ SOCIAL WALL FUNCTIONS ============
+
+export async function getSocialPosts(propertyId: string): Promise<SocialPost[]> {
+    const supabase = createClient();
+    const { data, error } = await supabase
+        .from('social_posts')
+        .select('*')
+        .eq('property_id', propertyId)
+        .order('sort_order', { ascending: true })
+        .order('created_at', { ascending: false });
+
+    if (error) {
+        console.error('Error fetching social posts:', error);
+        return [];
+    }
+    return data || [];
+}
+
+export async function createSocialPost(input: CreateSocialPostInput): Promise<SocialPost | null> {
+    const supabase = createClient();
+    const { data, error } = await supabase
+        .from('social_posts')
+        .insert(input)
+        .select()
+        .single();
+
+    if (error) {
+        console.error('Error creating social post:', error);
+        return null;
+    }
+    return data;
+}
+
+export async function deleteSocialPost(id: string): Promise<boolean> {
+    const supabase = createClient();
+    const { error } = await supabase
+        .from('social_posts')
+        .delete()
+        .eq('id', id);
+
+    if (error) {
+        console.error('Error deleting social post:', error);
+        return false;
+    }
+    return true;
+}
+
+export async function updateSocialPostOrder(posts: SocialPost[]): Promise<boolean> {
+    const supabase = createClient();
+
+    // Naive update: update one by one. For better perf use upsert or rpc.
+    // Given the low number of posts, this is fine.
+    try {
+        await Promise.all(posts.map((post, index) =>
+            supabase
+                .from('social_posts')
+                .update({ sort_order: index })
+                .eq('id', post.id)
+        ));
+        return true;
+    } catch (error) {
+        console.error("Error updating sort order:", error);
+        return false;
+    }
 }
 
 

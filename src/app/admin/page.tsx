@@ -28,7 +28,9 @@ import {
     Users,
     Tag,
     Phone,
-    Mail
+    Mail,
+    Share2,
+    Code
 } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -61,9 +63,13 @@ import {
     getGuests,
     updateGuest,
     addGuestTag,
-    removeGuestTag
+    removeGuestTag,
+    getSocialPosts,
+    createSocialPost,
+    deleteSocialPost,
+    updateSocialPostOrder
 } from "@/lib/supabase";
-import type { Property, Booking, AddOn, PropertyImage, BookingStatus, Amenity, Campaign, Guest } from "@/types/database";
+import type { Property, Booking, AddOn, PropertyImage, BookingStatus, Amenity, Campaign, Guest, SocialPost } from "@/types/database";
 import { format, startOfMonth, endOfMonth, isWithinInterval, parseISO } from "date-fns";
 
 // TikTok icon
@@ -159,6 +165,12 @@ export default function AdminDashboard() {
                         onClick={() => setActiveTab("guests")}
                     />
                     <SidebarItem
+                        icon={<Share2 className="w-5 h-5" />}
+                        label="Social Wall"
+                        active={activeTab === "social"}
+                        onClick={() => setActiveTab("social")}
+                    />
+                    <SidebarItem
                         icon={<Settings className="w-5 h-5" />}
                         label="Settings"
                         active={activeTab === "settings"}
@@ -191,6 +203,7 @@ export default function AdminDashboard() {
                 {activeTab === "amenities" && <AmenitiesTab />}
                 {activeTab === "campaigns" && <CampaignsTab />}
                 {activeTab === "guests" && <GuestsTab />}
+                {activeTab === "social" && <SocialTab />}
                 {activeTab === "bookings" && <BookingsTab />}
                 {activeTab === "images" && <ImagesTab />}
             </main>
@@ -1749,6 +1762,186 @@ function GuestsTab() {
                     )}
                 </CardContent>
             </Card>
+        </div>
+    );
+}
+
+function SocialTab() {
+    const [property, setProperty] = useState<Property | null>(null);
+    const [posts, setPosts] = useState<SocialPost[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [isCreating, setIsCreating] = useState(false);
+    const [newPost, setNewPost] = useState({
+        platform: "instagram",
+        embed_code: "",
+        caption: ""
+    });
+
+    useEffect(() => {
+        async function fetchData() {
+            try {
+                const propertyData = await getProperty();
+                if (propertyData) {
+                    setProperty(propertyData);
+                    const postsData = await getSocialPosts(propertyData.id);
+                    setPosts(postsData);
+                }
+            } catch (error) {
+                console.error("Error fetching social posts:", error);
+                toast.error("Failed to load social posts");
+            } finally {
+                setIsLoading(false);
+            }
+        }
+        fetchData();
+    }, []);
+
+    const handleCreate = async () => {
+        if (!newPost.embed_code.trim() || !property) return;
+
+        // Basic cleanup of embed code if user pasted a full iframe but we only need src? 
+        // Actually, we are storing the full code.
+
+        setIsCreating(true);
+        try {
+            const post = await createSocialPost({
+                property_id: property.id,
+                platform: newPost.platform,
+                embed_code: newPost.embed_code.trim(),
+                caption: newPost.caption.trim(),
+                sort_order: posts.length
+            });
+
+            if (post) {
+                setPosts([post, ...posts]);
+                setNewPost({ platform: "instagram", embed_code: "", caption: "" });
+                toast.success("Social post added!");
+            }
+        } catch (error) {
+            toast.error("Failed to add social post");
+        } finally {
+            setIsCreating(false);
+        }
+    };
+
+    const handleDelete = async (id: string) => {
+        try {
+            const success = await deleteSocialPost(id);
+            if (success) {
+                setPosts(posts.filter(p => p.id !== id));
+                toast.success("Post removed");
+            }
+        } catch (error) {
+            toast.error("Failed to remove post");
+        }
+    };
+
+    if (isLoading) {
+        return (
+            <div className="flex items-center justify-center h-64">
+                <Loader2 className="w-8 h-8 animate-spin" />
+            </div>
+        );
+    }
+
+    return (
+        <div className="space-y-6">
+            <div>
+                <h1 className="text-3xl font-bold">Social Wall</h1>
+                <p className="text-muted-foreground">
+                    Embed social media posts to display on your website.
+                </p>
+            </div>
+
+            <Card>
+                <CardHeader>
+                    <CardTitle>Add New Post</CardTitle>
+                    <CardDescription>Paste the embed code from Instagram, TikTok, or Facebook</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium">Platform</label>
+                            <select
+                                className="w-full h-10 px-3 py-2 rounded-md border text-sm"
+                                value={newPost.platform}
+                                onChange={(e) => setNewPost({ ...newPost, platform: e.target.value })}
+                            >
+                                <option value="instagram">Instagram</option>
+                                <option value="tiktok">TikTok</option>
+                                <option value="facebook">Facebook</option>
+                                <option value="other">Other</option>
+                            </select>
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium">Caption (Optional)</label>
+                            <Input
+                                placeholder="Short description..."
+                                value={newPost.caption}
+                                onChange={(e) => setNewPost({ ...newPost, caption: e.target.value })}
+                            />
+                        </div>
+                    </div>
+                    <div className="space-y-2">
+                        <label className="text-sm font-medium">Embed Code</label>
+                        <textarea
+                            placeholder='<blockquote ...> or <iframe ...> code from the social platform'
+                            value={newPost.embed_code}
+                            onChange={(e) => setNewPost({ ...newPost, embed_code: e.target.value })}
+                            className="w-full min-h-[100px] p-3 border rounded-md font-mono text-xs"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                            Go to the post {'>'} Share {'>'} Embed {'>'} Copy Code.
+                        </p>
+                    </div>
+                    <Button
+                        onClick={handleCreate}
+                        disabled={!newPost.embed_code.trim() || isCreating}
+                    >
+                        {isCreating ? (
+                            <>
+                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                Adding...
+                            </>
+                        ) : (
+                            <>
+                                <Plus className="w-4 h-4 mr-2" />
+                                Add to Wall
+                            </>
+                        )}
+                    </Button>
+                </CardContent>
+            </Card>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {posts.map((post) => (
+                    <Card key={post.id} className="overflow-hidden">
+                        <div className="p-4 bg-gray-50 border-b flex justify-between items-center">
+                            <div className="flex items-center gap-2">
+                                {post.platform === 'instagram' && <Instagram className="w-4 h-4" />}
+                                {post.platform === 'tiktok' && <span className="font-bold text-xs">TikTok</span>}
+                                {post.platform === 'facebook' && <Facebook className="w-4 h-4" />}
+                                <span className="text-sm font-medium capitalize">{post.platform}</span>
+                            </div>
+                            <Button
+                                variant="destructive"
+                                size="sm"
+                                onClick={() => handleDelete(post.id)}
+                            >
+                                <Trash2 className="w-4 h-4" />
+                            </Button>
+                        </div>
+                        <div className="p-4 max-h-[500px] overflow-auto">
+                            <div dangerouslySetInnerHTML={{ __html: post.embed_code }} />
+                        </div>
+                        {post.caption && (
+                            <div className="p-4 border-t bg-white">
+                                <p className="text-sm text-muted-foreground">{post.caption}</p>
+                            </div>
+                        )}
+                    </Card>
+                ))}
+            </div>
         </div>
     );
 }

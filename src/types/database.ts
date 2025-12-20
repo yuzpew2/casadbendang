@@ -218,3 +218,29 @@ export interface UpdateGuestInput {
     last_stay_date?: string;
     total_stays?: number;
 }
+
+// Social Wall
+export interface SocialPost {
+    id: string;
+    property_id: string;
+    platform: 'instagram' | 'tiktok' | 'facebook' | 'other';
+    embed_code: string;
+    caption?: string;
+    sort_order: number;
+    created_at: string;
+}
+
+export interface CreateSocialPostInput {
+    property_id: string;
+    platform: string;
+    embed_code: string;
+    caption?: string;
+    sort_order?: number;
+}
+
+export interface UpdateSocialPostInput {
+    platform?: string;
+    embed_code?: string;
+    caption?: string;
+    sort_order?: number;
+}

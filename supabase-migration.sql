@@ -169,6 +169,31 @@ BEGIN
     END IF;
 END $$;
 
+-- 23. SOCIAL WALL (Embeds)
+CREATE TABLE IF NOT EXISTS social_posts (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    property_id UUID REFERENCES properties(id) ON DELETE CASCADE,
+    platform TEXT NOT NULL, -- 'instagram', 'tiktok', 'facebook', 'other'
+    embed_code TEXT NOT NULL,
+    caption TEXT,
+    sort_order INT DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 24. RLS for Social Posts
+ALTER TABLE social_posts ENABLE ROW LEVEL SECURITY;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'social_posts' AND policyname = 'Public can view social posts') THEN
+        CREATE POLICY "Public can view social posts" ON social_posts FOR SELECT USING (true);
+    END IF;
+    
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'social_posts' AND policyname = 'Admin full access to social posts') THEN
+        CREATE POLICY "Admin full access to social posts" ON social_posts FOR ALL USING (auth.role() = 'authenticated');
+    END IF;
+END $$;
+
 SELECT 'Migration completed successfully! Remember to configure storage bucket policies.' as status;
 
 
