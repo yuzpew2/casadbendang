@@ -11,8 +11,8 @@ import { RoomSelector } from "@/components/booking/RoomSelector";
 import { AddOnSelector } from "@/components/booking/AddOnSelector";
 import { SummaryCard } from "@/components/booking/SummaryCard";
 import { useBookingStore } from "@/store/useBookingStore";
-import { getProperty, getActiveAddOns, getPropertyImages } from "@/lib/supabase";
-import type { Property, AddOn, PropertyImage } from "@/types/database";
+import { getProperty, getActiveAddOns, getPropertyImages, getActiveAmenities } from "@/lib/supabase";
+import type { Property, AddOn, PropertyImage, Amenity } from "@/types/database";
 import {
     Waves,
     Mountain,
@@ -24,7 +24,11 @@ import {
     WashingMachine,
     Loader2,
     Instagram,
-    Facebook
+    Facebook,
+    Check,
+    Coffee,
+    Bed,
+    Bath
 } from "lucide-react";
 
 // TikTok icon (not in Lucide)
@@ -37,33 +41,28 @@ function TikTokIcon({ className }: { className?: string }) {
 }
 
 // Map amenity names to Lucide icons
-const amenityIcons: Record<string, React.ReactNode> = {
-    "Private Pool": <Waves className="w-5 h-5 text-primary" />,
-    "Paddy Field View": <Mountain className="w-5 h-5 text-primary" />,
-    "Fully Equipped Kitchen": <UtensilsCrossed className="w-5 h-5 text-primary" />,
-    "Free Parking": <Car className="w-5 h-5 text-primary" />,
-    "Air Conditioning": <Wind className="w-5 h-5 text-primary" />,
-    "Wi-Fi": <Wifi className="w-5 h-5 text-primary" />,
-    "Smart TV": <Tv className="w-5 h-5 text-primary" />,
-    "Washing Machine": <WashingMachine className="w-5 h-5 text-primary" />,
+// Dynamic icon map for amenities
+const amenityIconMap: Record<string, React.ReactNode> = {
+    "Waves": <Waves className="w-5 h-5 text-primary" />,
+    "Mountain": <Mountain className="w-5 h-5 text-primary" />,
+    "UtensilsCrossed": <UtensilsCrossed className="w-5 h-5 text-primary" />,
+    "Car": <Car className="w-5 h-5 text-primary" />,
+    "Wind": <Wind className="w-5 h-5 text-primary" />,
+    "Wifi": <Wifi className="w-5 h-5 text-primary" />,
+    "Tv": <Tv className="w-5 h-5 text-primary" />,
+    "WashingMachine": <WashingMachine className="w-5 h-5 text-primary" />,
+    "Check": <Check className="w-5 h-5 text-primary" />,
+    "Coffee": <Coffee className="w-5 h-5 text-primary" />,
+    "Bed": <Bed className="w-5 h-5 text-primary" />,
+    "Bath": <Bath className="w-5 h-5 text-primary" />,
 };
-
-const AMENITIES = [
-    "Private Pool",
-    "Paddy Field View",
-    "Fully Equipped Kitchen",
-    "Free Parking",
-    "Air Conditioning",
-    "Wi-Fi",
-    "Smart TV",
-    "Washing Machine"
-];
 
 export default function Home() {
     const setRoomPrices = useBookingStore((state) => state.setRoomPrices);
     const [property, setProperty] = useState<Property | null>(null);
     const [addOns, setAddOns] = useState<AddOn[]>([]);
     const [images, setImages] = useState<PropertyImage[]>([]);
+    const [amenities, setAmenities] = useState<Amenity[]>([]);
     const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
@@ -79,12 +78,14 @@ export default function Home() {
                         price_6_rooms: propertyData.price_6_rooms,
                     });
 
-                    const [addOnsData, imagesData] = await Promise.all([
+                    const [addOnsData, imagesData, amenitiesData] = await Promise.all([
                         getActiveAddOns(propertyData.id),
-                        getPropertyImages(propertyData.id)
+                        getPropertyImages(propertyData.id),
+                        getActiveAmenities(propertyData.id)
                     ]);
                     setAddOns(addOnsData);
                     setImages(imagesData);
+                    setAmenities(amenitiesData);
                 }
             } catch (error) {
                 console.error("Error fetching property data:", error);
@@ -185,20 +186,22 @@ export default function Home() {
                             </div>
                         </div>
 
-                        <div className="border-t pt-12">
-                            <h3 className="text-2xl font-bold mb-6">Amenities</h3>
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                {AMENITIES.map((amenity) => (
-                                    <div
-                                        key={amenity}
-                                        className="flex items-center gap-3 p-4 bg-white rounded-xl border shadow-sm hover:shadow-md transition-shadow"
-                                    >
-                                        {amenityIcons[amenity] || <div className="w-5 h-5 rounded-full bg-primary" />}
-                                        <span className="text-sm font-medium">{amenity}</span>
-                                    </div>
-                                ))}
+                        {amenities.length > 0 && (
+                            <div className="border-t pt-12">
+                                <h3 className="text-2xl font-bold mb-6">Amenities</h3>
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                    {amenities.map((amenity) => (
+                                        <div
+                                            key={amenity.id}
+                                            className="flex items-center gap-3 p-4 bg-white rounded-xl border shadow-sm hover:shadow-md transition-shadow"
+                                        >
+                                            {amenityIconMap[amenity.icon] || <Check className="w-5 h-5 text-primary" />}
+                                            <span className="text-sm font-medium">{amenity.name}</span>
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
-                        </div>
+                        )}
                     </div>
 
                     {/* Sidebar Summary */}
@@ -273,7 +276,9 @@ export default function Home() {
                         </div>
                     )}
 
-                    <p className="mt-6 text-muted-foreground">© 2025 {propertyName} Homestay. Dedicated to providing cozy tropical experiences.</p>
+                    <p className="mt-6 text-muted-foreground">
+                        © 2025 {propertyName} Homestay. {property?.footer_description || "Dedicated to providing cozy tropical experiences."}
+                    </p>
                 </div>
             </footer>
         </div>
